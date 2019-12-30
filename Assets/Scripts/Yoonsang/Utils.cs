@@ -1,23 +1,46 @@
 ﻿using System.Text;
 using UnityEngine;
 
-public static class Utils {
-  #region Method Extensions to UnityEngine.Object.
-  public static bool Null(this Object obj) {
+public class Utils {  
+  /// <summary>
+  /// 
+  /// </summary>
+  /// <param name="obj"></param>
+  /// <returns></returns>
+  public static bool Null(Object obj) {
     return ReferenceEquals(obj, null);
   }
-
-  public static bool FakeNull(this Object obj) {
-    return ReferenceEquals(obj, null) && !obj;
+  /// <summary>
+  /// 
+  /// </summary>
+  /// <param name="obj"></param>
+  /// <param name="expr"></param>
+  /// <returns></returns>
+  public static bool NullFinally(Object obj, System.Action expr) {
+    bool res = Null(obj);
+    if (res) { expr.Invoke(); }
+    return res;
   }
-
-  public static bool Assigned(this Object obj) {
-    return obj;
-  }
-  #endregion
-
-  public static bool Null(object obj) {
+  /// <summary>
+  /// 
+  /// </summary>
+  /// <param name="obj"></param>
+  /// <returns></returns>
+  public static bool Assigned(Object obj) {
     return ReferenceEquals(obj, null);
+  }
+  /// <summary>
+  /// 
+  /// </summary>
+  /// <param name="obj"></param>
+  /// <param name="expr"></param>
+  /// <returns></returns>
+  public static bool AssignedFinally(Object obj, System.Action expr) {
+    bool res = Assigned(obj);
+    if (obj) {
+      expr.Invoke();
+    }
+    return res;
   }
 
   public class MyIO_ {
@@ -49,7 +72,7 @@ public static class Utils {
       System.Diagnostics.Conditional("TRACE_ON")]
     public static void LogMat(ref Matrix4x4 mat) {
       // https://docs.microsoft.com/ko-kr/dotnet/csharp/tuples
-      (int rowLen, int colLen) dimension = (rowLen: 4, colLen: 4); // (named) Tuple-Projection Initializer.
+      var dimension = (rowLen: 4, colLen: 4); // (named) Tuple-Projection Initializer.
       StringBuilder arrStrB = default; // default(System.Text.StringBuilder).
 
       for (int i = 0; i < dimension.rowLen; ++i) {

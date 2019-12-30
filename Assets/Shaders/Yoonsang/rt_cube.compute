@@ -1,0 +1,74 @@
+﻿// // Each #kernel tells which function to compile; you can have many kernels
+// #pragma kernel CSMain
+
+// RWTexture2D<float4> _Result;
+// float4x4 _CameraToWorld;
+// float4x4 _CameraInverseProjection;
+// float2 _PixelOffset;
+// float4 _Time;
+// uint _ScreenDimensionX;
+// uint _ScreenDimensionY;
+// float4 _PixelPos;
+// int _Bounces;
+
+// static const float PI2 = 6.28318528f;
+// static const float PI = 3.14159265f;
+// static const int EPS = 1e-8;
+
+// struct Ray {
+//     float3 origin;
+//     float3 direction;
+//     float3 energy;
+// };
+
+// struct RayHit {
+//     float3 position;
+//     float distance;
+//     float3 normal;
+//     float3 albedo;
+//     float3 specular;
+//     float3 emission;
+// };
+
+// struct MeshObject {
+//     float4x4 localToWorldMatrix;
+//     int indices_offset;
+//     int indices_count;
+//     int use_vertex_color;
+// };
+
+// StructuredBuffer<MeshObject> _MeshObjects;
+// StructuredBuffer<float3> _Vertices;
+// StructuredBuffer<int> _Indices;
+// StructuredBuffer<float4> _Colors;
+
+// //
+// // Functions.
+// //
+
+// float4 ComputeScreenPos(float4 vertexPos);
+// Ray CreateRay(float3 origin, float direction);
+// RayHit CreateRayHit();
+// Ray CreateCameraRay(float2 uv);
+// void IntersectTriangle(Ray ray, inout RayHit bestHit, float3x3 vtx, inout float3 tuv);
+// bool IntersectTriangle_MT97_internal(Ray ray, float3 v0, float3 v1, float3 v2, inout float t, inout float u, inout float v);
+// void IntersectMesh(Ray ray, inout RayHit bestHit, MeshObject mesh);
+// RayHit Trace(Ray ray);
+// float3 Shade(inout Ray ray, RayHit hit);
+// float3 ShadeCubeGradually();
+
+// [numthreads(8,8,1)]
+// void CSMain (uint3 id : SV_DispatchThreadID) {    
+//     uint width, height;
+//     _Result.GetDimension(width, height);
+//     float2 uv = float2((id.xy + _PixelOffset) / float2(width, height) * 2.0f - 1.0f);
+//     Ray ray = CreateCamRay(uv);
+//     float3 res = (float3)0;
+//     for (int i = 0; i < _Bounces; ++i) {
+//         RayHit hit = Trace(ray);
+//         res += ray.energy * Shade(ray, hit);
+//         if (!any(ray.energy))
+//           break;
+//     }
+//     _Result[id.xy] = float4(res, 1);
+// }

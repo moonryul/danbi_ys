@@ -825,7 +825,7 @@ AudioListener:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 963194225}
-  m_Enabled: 1
+  m_Enabled: 0
 --- !u!20 &963194227
 Camera:
   m_ObjectHideFlags: 0
@@ -895,13 +895,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2a91aeb40c188e6498132c2bccacf32d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  RayTracingShader: {fileID: 7200000, guid: 85dfd5cbb4f82354cb171ea90ddd613b, type: 3}
-  _target: {fileID: 8400000, guid: 28ac97af64037e7419301e5a1fbd9db4, type: 2}
-  _Skybox: {fileID: 2800000, guid: de78f930088fc194290da7400c89bfb5, type: 3}
-  _Video: {fileID: 2100000, guid: 5fbe261e694852e4ea238dcc6c459d73, type: 2}
-  _directional_light: {fileID: 59389930}
-  _offset_Radius: {x: 3, y: 8}
-  _sphere_placement_radius: 100
+  Bounce: 2
+  RTshader: {fileID: 0}
+  ResultRenderTex: {fileID: 0}
+  SkyboxTex: {fileID: 0}
+  VideoMat: {fileID: 0}
+  DirLight: {fileID: 0}
+  OffsetRadius: {x: 3, y: 8}
+  SpherePlacementRadius: 100
 --- !u!114 &963194230
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1039,7 +1040,7 @@ PrefabInstance:
     - target: {fileID: -927199367670048503, guid: ef7dd18d146d2da4cba39df907b6f236,
         type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: -4216859302048453862, guid: ef7dd18d146d2da4cba39df907b6f236,
         type: 3}
@@ -1098,6 +1099,24 @@ PrefabInstance:
       objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: ef7dd18d146d2da4cba39df907b6f236, type: 3}
+--- !u!1 &1462003838 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: -927199367670048503, guid: ef7dd18d146d2da4cba39df907b6f236,
+    type: 3}
+  m_PrefabInstance: {fileID: 1442297026}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1462003839
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1462003838}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 84c51ac0523fc5f4a8121b40a587b86a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1001 &1676651030
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1296,7 +1315,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &2089033019
 MonoBehaviour:
   m_ObjectHideFlags: 0

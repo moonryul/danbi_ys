@@ -31,17 +31,17 @@ public class OnPostRednderScript_ : MonoBehaviour
 
   void Awake()
   {
-    if (mPyramidObj.FakeNull())
+    if (mPyramidObj.Null())
     {
-      mPyramidObj = (!GameObject.Find("Prewarp/Pyramid").FakeNull() ? GameObject.Find("Prewarp/Pyramid") : default);
+      mPyramidObj = (!GameObject.Find("Prewarp/Pyramid").Null() ? GameObject.Find("Prewarp/Pyramid") : default);
     }
     mPyramid = mPyramidObj.GetComponent<Pyramid_>();
-    if (mPyramid.FakeNull())
+    if (mPyramid.Null())
     {
       Debug.LogError("Pyramid GameObject don't contains Script <<Pyramid_>>");
     }
 
-    if (mPyramid.ThisUVMapRT.FakeNull())
+    if (mPyramid.ThisUVMapRT.Null())
       return;
     if (!mPyramid.ThisIntersectBuf.IsValid())
       return;
@@ -73,10 +73,10 @@ public class OnPostRednderScript_ : MonoBehaviour
      *   
      *   Therefore, we need to compare UnityEngine.Object by using <<object.ReferenceEquals(UnityEngine.Object, null)>> or <<(object)UnityEngine.Object == null >>.
     */
-    if (mPyramid.ThisMat.FakeNull())
+    if (mPyramid.ThisMat.Null())
       return;
 
-    if (mPyramid.ThisUVMapRT.FakeNull())
+    if (mPyramid.ThisUVMapRT.Null())
       return;
 
     if (!mPyramid.ThisIntersectBuf.IsValid())

@@ -94,7 +94,7 @@ public class Pyramid_ : MonoBehaviour {
   [SerializeField] RenderTexture mUVMapRT;
   public RenderTexture ThisUVMapRT {
     get {
-      if (mUVMapRT.FakeNull()) {
+      if (mUVMapRT.Null()) {
         Debug.LogError("UVMap RenderTexture didn't created");
       }
       return mUVMapRT;
@@ -104,7 +104,7 @@ public class Pyramid_ : MonoBehaviour {
   [SerializeField] Texture2D mTex2D;
   public Texture2D ThisTex2D {
     get {
-      if (mTex2D.FakeNull()) {
+      if (mTex2D.Null()) {
         Debug.LogError("Final texture didn't created");
       }
       return mTex2D;
@@ -176,8 +176,8 @@ public class Pyramid_ : MonoBehaviour {
     mThisMat.SetTexture("_UVMapBuffer", mUVMapRT);
   }
 
-  private void OnDestroy() {
-    if (!Utils.Null(mIntersectBuf)) {
+  private void OnDestroy() {    
+    if (mIntersectBuf.IsValid()) { 
       mIntersectBuf.Dispose();
       mIntersectBuf = null;
     }
@@ -203,13 +203,13 @@ public class Pyramid_ : MonoBehaviour {
 
   public void Rebuild() {
     MeshFilter mf = GetComponent<MeshFilter>();
-    if (mf.FakeNull()) {
+    if (mf.Null()) {
       Debug.LogError("MeshFilter failed to assign", this);
       return;
     }
     mMesh = mf.sharedMesh;
 
-    if (mMesh.FakeNull()) {
+    if (mMesh.Null()) {
       mf.sharedMesh = new Mesh();
       mMesh = mf.sharedMesh;
     }

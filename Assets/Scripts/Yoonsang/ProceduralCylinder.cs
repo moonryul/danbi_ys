@@ -1,11 +1,9 @@
 ﻿using UnityEngine;
-using System.Collections;
 
 [RequireComponent(typeof(MeshFilter))]
 [RequireComponent(typeof(MeshRenderer))]
 
-public class ProceduralCylinder : MonoBehaviour
-{
+public class ProceduralCylinder : MonoBehaviour {
 
   //constants
   private const int DEFAULT_RADIAL_SEGMENTS = 8;
@@ -26,26 +24,29 @@ public class ProceduralCylinder : MonoBehaviour
   private float radius = DEFAULT_RADIUS;
   private float length = DEFAULT_HEIGHT;
 
-  public void AssignDefaultShader()
-  {
+  public void AssignDefaultShader() {
     //assign it a white Diffuse shader, it's better than the default magenta
-    MeshRenderer meshRenderer = (MeshRenderer)gameObject.GetComponent<MeshRenderer>();
+    var meshRenderer = gameObject.GetComponent<MeshRenderer>();
     meshRenderer.sharedMaterial = new Material(Shader.Find("Diffuse"));
     meshRenderer.sharedMaterial.color = Color.white;
   }
 
-  public void Rebuild()
-  {
+  public void Rebuild() {
     //create the mesh
     modelMesh = new Mesh();
     modelMesh.name = "ProceduralCylinderMesh";
-    meshFilter = (MeshFilter)gameObject.GetComponent<MeshFilter>();
+    meshFilter = gameObject.GetComponent<MeshFilter>();
     meshFilter.mesh = modelMesh;
     SetColliderMesh();
 
     //sanity check
-    if (radialSegments < MIN_RADIAL_SEGMENTS) radialSegments = MIN_RADIAL_SEGMENTS;
-    if (heightSegments < MIN_HEIGHT_SEGMENTS) heightSegments = MIN_HEIGHT_SEGMENTS;
+    if (radialSegments < MIN_RADIAL_SEGMENTS) {
+      radialSegments = MIN_RADIAL_SEGMENTS;
+    }
+
+    if (heightSegments < MIN_HEIGHT_SEGMENTS) {
+      heightSegments = MIN_HEIGHT_SEGMENTS;
+    }
 
     //calculate how many vertices we need
     numVertexColumns = radialSegments + 1;  //+1 for welding
@@ -56,14 +57,14 @@ public class ProceduralCylinder : MonoBehaviour
     int numUVs = numVertices;                 //always
     int numSideTris = radialSegments * heightSegments * 2;    //for one cap
     int numCapTris = radialSegments - 2;            //fact
-    int trisArrayLength = (numSideTris + numCapTris * 2) * 3; //3 places in the array for each tri
+    int trisArrayLength = ( numSideTris + numCapTris * 2 ) * 3; //3 places in the array for each tri
 
     //optional: log the number of tris
     //Debug.Log ("CustomCylinder has " + trisArrayLength/3 + " tris");
 
     //initialize arrays
-    Vector3[] Vertices = new Vector3[numVertices];
-    Vector2[] UVs = new Vector2[numUVs];
+    var Vertices = new Vector3[numVertices];
+    var UVs = new Vector2[numUVs];
     int[] Tris = new int[trisArrayLength];
 
     //precalculate increments to improve performance
@@ -72,16 +73,13 @@ public class ProceduralCylinder : MonoBehaviour
     float uvStepH = 1.0f / radialSegments;
     float uvStepV = 1.0f / heightSegments;
 
-    for (int j = 0; j < numVertexRows; j++)
-    {
-      for (int i = 0; i < numVertexColumns; i++)
-      {
+    for (int j = 0; j < numVertexRows; j++) {
+      for (int i = 0; i < numVertexColumns; i++) {
         //calculate angle for that vertex on the unit circle
         float angle = i * angleStep;
 
         //"fold" the sheet around as a cylinder by placing the first and last vertex of each row at the same spot
-        if (i == numVertexColumns - 1)
-        {
+        if (i == numVertexColumns - 1) {
           angle = 0;
         }
 
@@ -92,28 +90,25 @@ public class ProceduralCylinder : MonoBehaviour
         UVs[j * numVertexColumns + i] = new Vector2(i * uvStepH, j * uvStepV);
 
         //create the tris				
-        if (j == 0 || i >= numVertexColumns - 1)
-        {
+        if (j == 0 || i >= numVertexColumns - 1) {
           //nothing to do on the first and last "floor" on the tris, capping is done below
           //also nothing to do on the last column of vertices
           continue;
-        }
-        else
-        {
+        } else {
           //create 2 tris below each vertex
           //6 seems like a magic number. For every vertex we draw 2 tris in this for-loop, therefore we need 2*3=6 indices in the Tris array
           //offset the base by the number of slots we need for the bottom cap tris. Those will be populated once we draw the cap
-          int baseIndex = numCapTris * 3 + (j - 1) * radialSegments * 6 + i * 6;
+          int baseIndex = numCapTris * 3 + ( j - 1 ) * radialSegments * 6 + i * 6;
 
           //1st tri - below and in front
           Tris[baseIndex + 0] = j * numVertexColumns + i;
           Tris[baseIndex + 1] = j * numVertexColumns + i + 1;
-          Tris[baseIndex + 2] = (j - 1) * numVertexColumns + i;
+          Tris[baseIndex + 2] = ( j - 1 ) * numVertexColumns + i;
 
           //2nd tri - the one it doesn't touch
-          Tris[baseIndex + 3] = (j - 1) * numVertexColumns + i;
+          Tris[baseIndex + 3] = ( j - 1 ) * numVertexColumns + i;
           Tris[baseIndex + 4] = j * numVertexColumns + i + 1;
-          Tris[baseIndex + 5] = (j - 1) * numVertexColumns + i + 1;
+          Tris[baseIndex + 5] = ( j - 1 ) * numVertexColumns + i + 1;
         }
       }
     }
@@ -124,25 +119,19 @@ public class ProceduralCylinder : MonoBehaviour
     int rightIndex = 0;
     int middleIndex = 0;
     int topCapVertexOffset = numVertices - numVertexColumns;
-    for (int i = 0; i < numCapTris; i++)
-    {
+    for (int i = 0; i < numCapTris; i++) {
       int bottomCapBaseIndex = i * 3;
-      int topCapBaseIndex = (numCapTris + numSideTris) * 3 + i * 3;
+      int topCapBaseIndex = ( numCapTris + numSideTris ) * 3 + i * 3;
 
-      if (i == 0)
-      {
+      if (i == 0) {
         middleIndex = 0;
         leftIndex = 1;
         rightIndex = numVertexColumns - 2;
         leftSided = true;
-      }
-      else if (leftSided)
-      {
+      } else if (leftSided) {
         middleIndex = rightIndex;
         rightIndex--;
-      }
-      else
-      {
+      } else {
         middleIndex = leftIndex;
         leftIndex++;
       }
@@ -172,37 +161,35 @@ public class ProceduralCylinder : MonoBehaviour
   // Recalculate mesh tangents
   // I found this on the internet (Unity forums?), I don't take credit for it.
 
-  void calculateMeshTangents(Mesh mesh)
-  {
+  void calculateMeshTangents(Mesh mesh) {
 
     //speed up math by copying the mesh arrays
     int[] triangles = mesh.triangles;
-    Vector3[] vertices = mesh.vertices;
-    Vector2[] uv = mesh.uv;
-    Vector3[] normals = mesh.normals;
+    var vertices = mesh.vertices;
+    var uv = mesh.uv;
+    var normals = mesh.normals;
 
     //variable definitions
     int triangleCount = triangles.Length;
     int vertexCount = vertices.Length;
 
-    Vector3[] tan1 = new Vector3[vertexCount];
-    Vector3[] tan2 = new Vector3[vertexCount];
+    var tan1 = new Vector3[vertexCount];
+    var tan2 = new Vector3[vertexCount];
 
-    Vector4[] tangents = new Vector4[vertexCount];
+    var tangents = new Vector4[vertexCount];
 
-    for (long a = 0; a < triangleCount; a += 3)
-    {
+    for (long a = 0; a < triangleCount; a += 3) {
       long i1 = triangles[a + 0];
       long i2 = triangles[a + 1];
       long i3 = triangles[a + 2];
 
-      Vector3 v1 = vertices[i1];
-      Vector3 v2 = vertices[i2];
-      Vector3 v3 = vertices[i3];
+      var v1 = vertices[i1];
+      var v2 = vertices[i2];
+      var v3 = vertices[i3];
 
-      Vector2 w1 = uv[i1];
-      Vector2 w2 = uv[i2];
-      Vector2 w3 = uv[i3];
+      var w1 = uv[i1];
+      var w2 = uv[i2];
+      var w3 = uv[i3];
 
       float x1 = v2.x - v1.x;
       float x2 = v3.x - v1.x;
@@ -216,10 +203,10 @@ public class ProceduralCylinder : MonoBehaviour
       float t1 = w2.y - w1.y;
       float t2 = w3.y - w1.y;
 
-      float r = 1.0f / (s1 * t2 - s2 * t1);
+      float r = 1.0f / ( s1 * t2 - s2 * t1 );
 
-      Vector3 sdir = new Vector3((t2 * x1 - t1 * x2) * r, (t2 * y1 - t1 * y2) * r, (t2 * z1 - t1 * z2) * r);
-      Vector3 tdir = new Vector3((s1 * x2 - s2 * x1) * r, (s1 * y2 - s2 * y1) * r, (s1 * z2 - s2 * z1) * r);
+      var sdir = new Vector3(( t2 * x1 - t1 * x2 ) * r, ( t2 * y1 - t1 * y2 ) * r, ( t2 * z1 - t1 * z2 ) * r);
+      var tdir = new Vector3(( s1 * x2 - s2 * x1 ) * r, ( s1 * y2 - s2 * y1 ) * r, ( s1 * z2 - s2 * z1 ) * r);
 
       tan1[i1] += sdir;
       tan1[i2] += sdir;
@@ -230,10 +217,9 @@ public class ProceduralCylinder : MonoBehaviour
       tan2[i3] += tdir;
     }
 
-    for (long a = 0; a < vertexCount; ++a)
-    {
-      Vector3 n = normals[a];
-      Vector3 t = tan1[a];
+    for (long a = 0; a < vertexCount; ++a) {
+      var n = normals[a];
+      var t = tan1[a];
 
       //Vector3 tmp = (t - n * Vector3.Dot(n, t)).normalized;
       //tangents[a] = new Vector4(tmp.x, tmp.y, tmp.z);
@@ -242,21 +228,20 @@ public class ProceduralCylinder : MonoBehaviour
       tangents[a].y = t.y;
       tangents[a].z = t.z;
 
-      tangents[a].w = (Vector3.Dot(Vector3.Cross(n, t), tan2[a]) < 0.0f) ? -1.0f : 1.0f;
+      tangents[a].w = ( Vector3.Dot(Vector3.Cross(n, t), tan2[a]) < 0.0f ) ? -1.0f : 1.0f;
     }
 
     mesh.tangents = tangents;
   }
 
-  void  SetColliderMesh()
-  {
+  void SetColliderMesh() {
     var meshCollider = gameObject.GetComponent<MeshCollider>();
-    if (meshCollider != null)
+    if (meshCollider != null) {
       meshCollider.sharedMesh = modelMesh;
+    }
   }
 
-  void Awake()
-  {
+  void Awake() {
     SetColliderMesh();
   }
 

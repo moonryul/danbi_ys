@@ -1,12 +1,11 @@
-﻿
-using UnityEngine;
+﻿using UnityEngine;
 
 [System.Serializable]
 public enum eCurrentVertexColor {
   RED, GREEN, BLUE, MAGENTA
 };
 
-public class ray_tracing_cube : ray_tracing_object {
+public class RTcube : RTmeshObject {
   public eCurrentVertexColor mMyVertexColor;
   Mesh mMesh;
 

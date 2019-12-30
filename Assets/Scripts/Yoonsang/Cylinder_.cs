@@ -28,13 +28,13 @@ public class Cylinder_ : MonoBehaviour {
 
   void Rebuild() {
     MeshFilter mf = GetComponent<MeshFilter>();
-    if (mf.FakeNull()) {
+    if (mf.Null()) {
       Debug.LogError("MeshFilter not found!");
       return;
     }
 
     Mesh mesh = mf.sharedMesh;
-    if (mesh.FakeNull()) {
+    if (mesh.Null()) {
       mf.mesh = new Mesh();
       mesh = mf.sharedMesh;
     }

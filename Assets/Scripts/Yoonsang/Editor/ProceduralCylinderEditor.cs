@@ -1,36 +1,33 @@
-﻿using UnityEngine;
-using UnityEditor;
-using System.Collections;
+﻿using UnityEditor;
+using UnityEngine;
 
 [CustomEditor(typeof(ProceduralCylinder))]
 
-public class ProceduralCylinderEditor : Editor
-{
+public class ProceduralCylinderEditor : Editor {
   [MenuItem("GameObject/Create Other/Procedural/Cylinder")]
 
-  static void Create()
-  {
-    GameObject gameObject = new GameObject("ProceduralCylinder");
-    ProceduralCylinder c = gameObject.AddComponent<ProceduralCylinder>();
-    MeshFilter meshFilter = gameObject.GetComponent<MeshFilter>();
+  static void Create() {
+    var gameObject = new GameObject("ProceduralCylinder");
+    var cylinder = gameObject.AddComponent<ProceduralCylinder>();
+    var meshFilter = gameObject.GetComponent<MeshFilter>();
     meshFilter.mesh = new Mesh();
-    c.Rebuild();
-    c.AssignDefaultShader();
+    Debug.Assert(!cylinder.GetComponent<ProceduralCylinder>().Null(),
+                 $"Procedurally Creating Cylinder failed!");
+    cylinder.Rebuild();
+    cylinder.AssignDefaultShader();
   }
 
-  public override void OnInspectorGUI()
-  {
-    ProceduralCylinder obj;
-    obj = target as ProceduralCylinder;
-    if (obj == null)
-    {
-      return;
-    }
+  public override void OnInspectorGUI() {
+    var cylinder = target as ProceduralCylinder;
+    //if (obj == null) {
+    //  return;
+    //}
+    Debug.Assert(!cylinder.Null(),
+                 $"Target cannot be casted to the ProceduralCylinder!");
 
     base.DrawDefaultInspector();
-    if (GUI.changed)
-    {
-      obj.Rebuild();
+    if (GUI.changed) {
+      cylinder.Rebuild();
     }
   }
 }
