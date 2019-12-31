@@ -2,7 +2,7 @@
 using UnityEngine;
 
 public class NullTester : MonoBehaviour {
-  Transform tf;  
+  Transform tf;
 
   void Start() {
     var sw = new Stopwatch();

@@ -1,13 +1,5 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using System.Text;
+﻿using UnityEngine;
 
-public struct RTdbg {
-  public UnityEngine.Vector4[] RetrivedColBuf;
-
-  public static void Log(StringBuilder format, UnityEngine.Object obj) {
-    Debug.Log(format, obj);
-  }
-
+public class RTdbg {
+  public Vector3[] RetrivedColBuf;
 };

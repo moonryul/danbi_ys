@@ -1,12 +1,23 @@
 ﻿using UnityEngine;
 
+/// <summary>
+/// The mesh object for ray tracing. every mesh object for the ray tracing shader must inherit this class.
+/// </summary>
 [RequireComponent(typeof(MeshRenderer), typeof(MeshFilter))]
 public class RTmeshObject : MonoBehaviour {
-  virtual public void OnEnable() {
-    RTmaster.register(this);
+  /// <summary>
+  /// OnEnable(), all the references of this gameObject is registered into the RTmeshObjectsList
+  /// To rebuild every mesh objects!
+  /// </summary>
+  public virtual void OnEnable() {
+    RThelper.RegisterToRTobject(this);
+    RThelper.DoesNeedToRebuildRTobjects = true;
   }
-
-  virtual public void OnDisable() {
-    RTmaster.unregister(this);
+  /// <summary>
+  /// OnDisable(), all the references inside the RTmeshObjectsList is removed.
+  /// </summary>
+  public virtual void OnDisable() {
+    RThelper.UnregisterToRTobject(this);
+    RThelper.DoesNeedToRebuildRTobjects = true;
   }
-}
+};

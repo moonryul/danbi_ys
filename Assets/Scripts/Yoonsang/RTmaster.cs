@@ -1,8 +1,7 @@
 ﻿using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
-[RequireComponent(typeof(Camera), typeof(RThelper))]
+[RequireComponent(typeof(Camera))]
 public class RTmaster : MonoBehaviour {
   [Header("Bounced amount of Ray Tracing (default = 2)"), Space(5)]
   [Range(0, 8), Header("---!Ray Tracer Parameters!---"), Space(10)]
@@ -29,41 +28,36 @@ public class RTmaster : MonoBehaviour {
   /// <summary>
   /// Current Sample Count for the optimized resampler of pixel edges.
   /// </summary>
-  uint CurrentSampleCount = 0;
+  public uint CurrentSampleCount { get; set; }
 
   /// <summary>
   /// Resampler Material (Hidden/AddShader).
   /// </summary>
-  Material ResampleAddeMat;
-
-  /// <summary>
-  /// Does Need To Rebuild RTobject to transfer the data into the RTshader?
-  /// </summary>
-  static bool IsNeedToRebuildRTobject = false;
-
-  /// <summary>
-  /// Ray Tracing Objects List that are transferred into the RTshader.
-  /// RTobject is based on the polymorphism. (There are others inherited shapes).
-  /// </summary>
-  public static List<RTmeshObject> RTobjectsList = new List<RTmeshObject>();
+  Material ResampleAddMat;
 
   [Header("Light for Ray Tracing Rendering (Current -> Lambertian / Future -> BDRF PBR)"), Space(5)]
   public Light DirLight;
+  /// <summary>
+  /// 
+  /// </summary>
+  public RThelper Helper;
+  /// <summary>
+  /// 
+  /// </summary>
+  public RTsphereLocator Locator;
+  /// <summary>
+  /// 
+  /// </summary>
+  RTdbg dbg;
 
-
-  RThelper Helper;
-
-  RTdbg DbgInfo;
-
-  void OnEnable() {
-    SetupSphere();
+  void Start() {
+    MainCamRef = GetComponent<Camera>();
+    Locator.LocateSphereRandomly();
+    dbg = new RTdbg();
   }
 
-  void Awake() {
-    MainCamRef = GetComponent<Camera>();
-  }  
-
   void OnRenderImage(RenderTexture source, RenderTexture destination) {
+    Debug.Assert(!RTshader.Null(), $"Ray tracing compute shader cannot be null!");
     // Rebuild the mesh objects if new mesh objects are coming up.
     RebuildMeshObjects();
     // Set Shader parameters.
@@ -71,12 +65,16 @@ public class RTmaster : MonoBehaviour {
     // Render it.
     Render(destination);
     // Retrieve the data from the vertex color buffer.
-    Helper.VtxColorsComputeBuf.GetData(DbgInfo.RetrivedColBuf);
-    for (int i = 0; i < Helper.VtxColorsComputeBuf.count; ++i) {
-      Debug.Log($"R: {DbgInfo.RetrivedColBuf[i].x}, "
-              + $"G: {DbgInfo.RetrivedColBuf[i].y}"
-              + $"B: {DbgInfo.RetrivedColBuf[i].z}");
+    if (dbg.RetrivedColBuf == null) {
+      dbg.RetrivedColBuf = new Vector3[Helper.VtxColorsList.Count];
     }
+
+    //Helper.VtxColorsComputeBuf.GetData(dbg.RetrivedColBuf);
+    //for (int i = 0; i < dbg.RetrivedColBuf.Length; ++i) {
+    //  Debug.Log($"R: {dbg.RetrivedColBuf[i].x}, "
+    //          + $"G: {dbg.RetrivedColBuf[i].y}, "
+    //          + $"B: {dbg.RetrivedColBuf[i].z}");
+    //}
   }
 
   void Update() {
@@ -109,26 +107,28 @@ public class RTmaster : MonoBehaviour {
     RTshader.Dispatch(0, threadGroupsX, threadGroupsY, 1);
 
     // Blit the result texture to the screen
-    if (ReferenceEquals(ResampleAddeMat, null)) {
-      ResampleAddeMat = new Material(Shader.Find("Hidden/AddShader"));
-      Debug.Log("add material is created!");
+    if (ResampleAddMat.Null()) {
+      ResampleAddMat = new Material(Shader.Find("Hidden/AddShader"));
+      //Debug.Log("add material is created!");
     }
 
-    ResampleAddeMat.SetFloat("_Sample", CurrentSampleCount);
+    ResampleAddMat.SetFloat("_Sample", CurrentSampleCount);
     Graphics.Blit(ResultRenderTex, destination);
     if (CurrentSampleCount < 100) {
       ++CurrentSampleCount;
     } else {
       return;
     }
-    //Debug.Log($"{_current_sample}");
   }
 
   void InitRenderTexture() {
-    if (ResultRenderTex == null || ResultRenderTex.width != Screen.width || ResultRenderTex.height != Screen.height) {
+    if (ResultRenderTex.Null()
+      || ResultRenderTex.width != Screen.width
+      || ResultRenderTex.height != Screen.height) {
       // Release render texture if we already have one
-      if (ResultRenderTex != null) {
+      if (!ResultRenderTex.Null()) {
         ResultRenderTex.Release();
+        ResultRenderTex = null;
       }
 
       // Get a render target for Ray Tracing
@@ -141,17 +141,18 @@ public class RTmaster : MonoBehaviour {
 
   void SetShaderParams() {
     RTshader.SetInt("_Bounces", Bounce);
-    RTshader.SetVector("_PixelOffset", new Vector2(UnityEngine.Random.value, UnityEngine.Random.value));
+    RTshader.SetVector("_PixelOffset",
+                       new Vector2(UnityEngine.Random.value, UnityEngine.Random.value));
     RTshader.SetTexture(0, "_SkyboxTexture", SkyboxTex);
     RTshader.SetMatrix("_CameraToWorld", MainCamRef.cameraToWorldMatrix);
     RTshader.SetMatrix("_CameraInverseProjection", MainCamRef.projectionMatrix.inverse);
-    RTshader.SetBuffer(0, "_Spheres", Helper.SphereComputeBuf);
+
     var light_dir = DirLight.transform.forward;
     RTshader.SetVector("_DirectionalLight",
-                              new Vector4(light_dir.x, light_dir.y, light_dir.z, DirLight.intensity));
-    SetComputeBuffer("_Spheres", Helper.SphereComputeBuf);
-    SetComputeBuffer("_MeshObjects", Helper.MeshObjectsComputeBuf);
-    SetComputeBuffer("_Vertices", Helper.VtxComputeBuf);
+                       new Vector4(light_dir.x, light_dir.y, light_dir.z, DirLight.intensity));
+    SetComputeBuffer("_Spheres", Locator.SpheresComputeBuf);
+    SetComputeBuffer("_MeshObjects", Helper.MeshObjectsAttrsComputeBuf);
+    SetComputeBuffer("_Vertices", Helper.VerticesComputeBuf);
     SetComputeBuffer("_Indices", Helper.IndicesComputeBuf);
     SetComputeBuffer("_Colors", Helper.VtxColorsComputeBuf);
     //RayTracingShader.SetInt("_Test_Colors_Length", _vertex_color_buffer.count);
@@ -165,80 +166,24 @@ public class RTmaster : MonoBehaviour {
                 Time.time * 100));
   }
 
-  void SetupSphere() {
-    var sphereRandomLocator = new RTobjectRandomLocator();
-    var res = sphereRandomLocator.Locate();
-
-    // Assign to compute shader.
-    Helper.SphereComputeBuf = new ComputeBuffer(res.Count, 40);
-    Helper.SphereComputeBuf.SetData<RTsphere>(res);
-  }
-
-  public static void register(RTmeshObject obj) {
-    RTobjectsList.Add(obj);
-    IsNeedToRebuildRTobject = true;
-  }
-
-  public static void unregister(RTmeshObject obj) {
-    RTobjectsList.Remove(obj);
-    IsNeedToRebuildRTobject = true;
-  }
-
   void RebuildMeshObjects() {
-    if (!IsNeedToRebuildRTobject) {
-      return;
-    }
+    Helper.RebuildMeshObjects();
 
-    IsNeedToRebuildRTobject = false;
-    CurrentSampleCount = 0;
-    // Clear all lists.
-    
-    // Loop over all objects and gather their data into a single list of vertices, indices and mesh_objects.
-    // vertex color is 
-    foreach (var go in RTobjectsList) {
-      var mesh = go.GetComponent<MeshFilter>().sharedMesh;
-      // Add vertex data.
-      int first_vtx = VerticesList.Count;
-      // _vertices -> list<Vector4> , mesh.vertices -> Vector4[].
-      // AddRange() ->
-      // Adds the elements of the specified collection to the end of the '_vertices(System.Collections.Generic.List)'.
-      VerticesList.AddRange(mesh.vertices);
-      // Add index data - if the vertex buffer wasn't empty before, the indices need to be offset.
-      int first_idx = IndicesList.Count;
-      int[] indices = mesh.GetIndices(0);
-      IndicesList.AddRange(indices.Select(i => i + first_vtx));
-      //bool is_cube = go is ray_tracing_cube;
-      bool is_cube = !ReferenceEquals(go.GetComponent<RTcube>(), null);
-
-      // Add the object itself.
-      MeshObjectsAttrsList.Add(new RTmeshObjectAttr() {
-        Local2WorldMatrix = go.transform.localToWorldMatrix,
-        IndicesOffset = first_idx,
-        IndicesCount = indices.Length,
-        // set 'true' if the element 'go' is convertible of 'ray_tracing_cube'.
-        UseVtxCol = is_cube ? 1 : 0
-      });
-
-      // if element 'go' is convertible of 'ray_tracing_cube'
-      // add the vertex color into the '_vertex_colors(list<Vector4>)'.
-      if (is_cube) {
-        // Add the vertex color.        
-        VtxColsList.AddRange(mesh.colors.Select(i => new Vector4(i.r, i.g, i.b, i.a)));
-      }
-    }
-
-    CreateOrSetComputeBuffer(ref MeshObjComputeBuf, MeshObjectsAttrsList, 76);
-    CreateOrSetComputeBuffer(ref VtxComputeBuf, VerticesList, 12);
-    CreateOrSetComputeBuffer(ref IndicesComputeBuf, IndicesList, 4);
-    CreateOrSetComputeBuffer(ref VtxColComputeBuf, VtxColsList, 16);
+    CreateOrSetComputeBuffer(ref Helper.MeshObjectsAttrsComputeBuf, Helper.MeshObjectsAttrsList, 80); //
+    CreateOrSetComputeBuffer(ref Helper.VerticesComputeBuf, Helper.VerticesList, 12); // float3
+    CreateOrSetComputeBuffer(ref Helper.IndicesComputeBuf, Helper.IndicesList, 4); // int
+    CreateOrSetComputeBuffer(ref Helper.VtxColorsComputeBuf, Helper.VtxColorsList, 12); // float3
   }
 
-  static void CreateOrSetComputeBuffer<T>(ref ComputeBuffer buffer, List<T> data, int stride)
-    where T : struct {
+  static void CreateOrSetComputeBuffer<T>(ref ComputeBuffer buffer,
+                                          List<T> data,
+                                          int stride) where T : struct {
     // check if we already have a compute buffer.
-    if (!ReferenceEquals(buffer, null)) {
+    if (!buffer.Null()) {
       // If no data or buffer doesn't match the given condition, release it.
-      if (data.Count == 0 || buffer.count != data.Count || buffer.stride != stride) {
+      if (data.Count == 0
+        || buffer.count != data.Count
+        || buffer.stride != stride) {
         buffer.Release();
         buffer = null;
       }
@@ -246,7 +191,7 @@ public class RTmaster : MonoBehaviour {
 
     if (data.Count != 0) {
       // If the buffer has been released or wasn't there to begin with, create it.
-      if (ReferenceEquals(buffer, null)) {
+      if (buffer.Null()) {
         buffer = new ComputeBuffer(data.Count, stride);
       }
       // Set data on the buffer.
@@ -255,9 +200,8 @@ public class RTmaster : MonoBehaviour {
   }
 
   void SetComputeBuffer(string name, ComputeBuffer buffer) {
-    if (!ReferenceEquals(buffer, null)) {
+    if (!buffer.Null()) {
       RTshader.SetBuffer(0, name, buffer);
     }
   }
-
 };

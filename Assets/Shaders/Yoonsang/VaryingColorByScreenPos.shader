@@ -5,7 +5,7 @@
     SubShader {
       Tags { "RenderType" = "Opaque" }
       LOD 100
-      //Cull off
+      Cull off
       
       Pass {
           CGPROGRAM
@@ -51,7 +51,7 @@
                 offset.y *= _BaseColor * (pixelPos.y / _ScreenDimensionY);
               }
             }
-            return float4(offset, 0.0);
+            return fixed4(offset, 0.0);
           }
           ENDCG
       }

@@ -1,13 +1,21 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 
-public class RTobjectRandomLocator : MonoBehaviour {
+public class RTsphereLocator : MonoBehaviour {
+  [Header("Offset Radius for Sphere ")]
   public Vector2 OffsetRadius = new Vector2(3.0f, 8.0f);
   public uint SphereMaxAmount = 20;
   public float SpherePlacementRadiusOffset = 100.0f;
   public ComputeBuffer SpheresComputeBuf;
 
-  public List<RTsphere> Locate() {
+  void OnDisable() {
+    if (!SpheresComputeBuf.Null()) {
+      SpheresComputeBuf.Release();
+      SpheresComputeBuf = null;
+    }
+  }
+
+  public void LocateSphereRandomly() {
     var spheresList = new List<RTsphere>();
     for (int i = 0; i < SphereMaxAmount; ++i) {
       var sphere = new RTsphere();
@@ -19,8 +27,7 @@ public class RTobjectRandomLocator : MonoBehaviour {
       // Reject spheres that are intersecting others.
       foreach (var other in spheresList) {
         float minDist = sphere.Radius + other.Radius;
-        if (Vector3.SqrMagnitude(sphere.Position - other.Position)
-          < minDist * minDist) {
+        if (Vector3.SqrMagnitude(sphere.Position - other.Position) < minDist * minDist) {
           // if the distance is less than the radius of the two comparer,
           // continue to the next condition.
           goto SKIP_INITIALIZING_SPHERE;
@@ -40,6 +47,8 @@ public class RTobjectRandomLocator : MonoBehaviour {
     SKIP_INITIALIZING_SPHERE:
       continue;
     }
-    return spheresList;
+    // Assign to compute shader.
+    SpheresComputeBuf = new ComputeBuffer(spheresList.Count, 52);
+    SpheresComputeBuf.SetData<RTsphere>(spheresList);
   }
 };

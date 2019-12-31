@@ -38,7 +38,7 @@ public class CameraControl : MonoBehaviour {
     if (Input.GetKey(KeyCode.E)) {
       transform.Translate(0, transform.up.y * move_speed * Time.deltaTime, 0);
     }
-    // fly-downard the camera.
+    // fly-downward the camera.
     if (Input.GetKey(KeyCode.Q)) {
       transform.Translate(0, -transform.up.y * move_speed * Time.deltaTime, 0);
     }
