@@ -40,7 +40,7 @@ public class RTmaster : MonoBehaviour {
   /// <summary>
   /// 
   /// </summary>
-  public RThelper Helper;
+  public RTcomputeShaderHelper Helper;
   /// <summary>
   /// 
   /// </summary>
@@ -54,20 +54,29 @@ public class RTmaster : MonoBehaviour {
     MainCamRef = GetComponent<Camera>();
     Locator.LocateSphereRandomly();
     dbg = new RTdbg();
+    ResampleAddMat = new Material(Shader.Find("Hidden/AddShader"));
   }
 
   void OnRenderImage(RenderTexture source, RenderTexture destination) {
     Debug.Assert(!RTshader.Null(), $"Ray tracing compute shader cannot be null!");
     // Rebuild the mesh objects if new mesh objects are coming up.
+    //dbg.DbgStopwatch.Start();
     RebuildMeshObjects();
+    //dbg.DbgStopwatch.Stop();
+    //RTdbg.Log($"Elapsed time of RebuildMeshObjects() is {dbg.DbgStopwatch.ElapsedMilliseconds}");
     // Set Shader parameters.
+
+    //dbg.DbgStopwatch.Start();
     SetShaderParams();
+    //dbg.DbgStopwatch.Stop();
+    //RTdbg.Log($"Elapsed time of SetSharderParams() is {dbg.DbgStopwatch.ElapsedMilliseconds}");
     // Render it.
+
     Render(destination);
     // Retrieve the data from the vertex color buffer.
-    if (dbg.RetrivedColBuf == null) {
-      dbg.RetrivedColBuf = new Vector3[Helper.VtxColorsList.Count];
-    }
+    //if (dbg.RetrivedColBuf == null) { 
+    //  dbg.RetrivedColBuf = new Vector3[Helper.VtxColorsList.Count];
+    //}
 
     //Helper.VtxColorsComputeBuf.GetData(dbg.RetrivedColBuf);
     //for (int i = 0; i < dbg.RetrivedColBuf.Length; ++i) {
@@ -89,39 +98,27 @@ public class RTmaster : MonoBehaviour {
 
   void Render(RenderTexture destination) {
     // Make sure we have a current render target
-    InitRenderTexture();
+    RefreshRenderTarget();
 
     // Set the target and dispatch the compute shader
     RTshader.SetTexture(0, "_Result", ResultRenderTex);
-    // Check the ratio of Screen.Width and Screen.Height is 16 by 9.
-    //  if (1) {
-    //   // ASSERT
-    //  }
-
-    //  if (1) {
-    //    // ASSERt
-    //  }
+    // TODO: Check the ratio of Screen.Width and Screen.Height is 16 by 9.   
 
     int threadGroupsX = Mathf.CeilToInt(Screen.width / 8.0f);
     int threadGroupsY = Mathf.CeilToInt(Screen.height / 8.0f);
     RTshader.Dispatch(0, threadGroupsX, threadGroupsY, 1);
 
-    // Blit the result texture to the screen
-    if (ResampleAddMat.Null()) {
-      ResampleAddMat = new Material(Shader.Find("Hidden/AddShader"));
-      //Debug.Log("add material is created!");
-    }
-
-    ResampleAddMat.SetFloat("_Sample", CurrentSampleCount);
+    //ResampleAddMat.SetFloat("_Sample", CurrentSampleCount);
+    // Blit the result texture to the screen    
     Graphics.Blit(ResultRenderTex, destination);
-    if (CurrentSampleCount < 100) {
-      ++CurrentSampleCount;
-    } else {
-      return;
-    }
+    //if (CurrentSampleCount < 100) {
+    //  ++CurrentSampleCount;
+    //} else {
+    //  return;
+    //}
   }
 
-  void InitRenderTexture() {
+  void RefreshRenderTarget() {
     if (ResultRenderTex.Null()
       || ResultRenderTex.width != Screen.width
       || ResultRenderTex.height != Screen.height) {
@@ -150,11 +147,11 @@ public class RTmaster : MonoBehaviour {
     var light_dir = DirLight.transform.forward;
     RTshader.SetVector("_DirectionalLight",
                        new Vector4(light_dir.x, light_dir.y, light_dir.z, DirLight.intensity));
-    SetComputeBuffer("_Spheres", Locator.SpheresComputeBuf);
-    SetComputeBuffer("_MeshObjects", Helper.MeshObjectsAttrsComputeBuf);
-    SetComputeBuffer("_Vertices", Helper.VerticesComputeBuf);
-    SetComputeBuffer("_Indices", Helper.IndicesComputeBuf);
-    SetComputeBuffer("_Colors", Helper.VtxColorsComputeBuf);
+    RTcomputeShaderHelper.SetComputeBuffer(ref RTshader, "_Spheres", Locator.SpheresComputeBuf);
+    RTcomputeShaderHelper.SetComputeBuffer(ref RTshader, "_MeshObjects", Helper.MeshObjectsAttrsComputeBuf);
+    RTcomputeShaderHelper.SetComputeBuffer(ref RTshader, "_Vertices", Helper.VerticesComputeBuf);
+    RTcomputeShaderHelper.SetComputeBuffer(ref RTshader, "_Indices", Helper.IndicesComputeBuf);
+    RTcomputeShaderHelper.SetComputeBuffer(ref RTshader, "_Colors", Helper.VtxColorsComputeBuf);
     //RayTracingShader.SetInt("_Test_Colors_Length", _vertex_color_buffer.count);
   }
 
@@ -167,41 +164,6 @@ public class RTmaster : MonoBehaviour {
   }
 
   void RebuildMeshObjects() {
-    Helper.RebuildMeshObjects();
-
-    CreateOrSetComputeBuffer(ref Helper.MeshObjectsAttrsComputeBuf, Helper.MeshObjectsAttrsList, 80); //
-    CreateOrSetComputeBuffer(ref Helper.VerticesComputeBuf, Helper.VerticesList, 12); // float3
-    CreateOrSetComputeBuffer(ref Helper.IndicesComputeBuf, Helper.IndicesList, 4); // int
-    CreateOrSetComputeBuffer(ref Helper.VtxColorsComputeBuf, Helper.VtxColorsList, 12); // float3
-  }
-
-  static void CreateOrSetComputeBuffer<T>(ref ComputeBuffer buffer,
-                                          List<T> data,
-                                          int stride) where T : struct {
-    // check if we already have a compute buffer.
-    if (!buffer.Null()) {
-      // If no data or buffer doesn't match the given condition, release it.
-      if (data.Count == 0
-        || buffer.count != data.Count
-        || buffer.stride != stride) {
-        buffer.Release();
-        buffer = null;
-      }
-    }
-
-    if (data.Count != 0) {
-      // If the buffer has been released or wasn't there to begin with, create it.
-      if (buffer.Null()) {
-        buffer = new ComputeBuffer(data.Count, stride);
-      }
-      // Set data on the buffer.
-      buffer.SetData(data);
-    }
-  }
-
-  void SetComputeBuffer(string name, ComputeBuffer buffer) {
-    if (!buffer.Null()) {
-      RTshader.SetBuffer(0, name, buffer);
-    }
-  }
+    Helper.RebuildMeshObjects();    
+  }   
 };

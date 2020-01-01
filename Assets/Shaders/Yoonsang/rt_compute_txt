@@ -1,0 +1,141 @@
+﻿float4 ComputeScreenPos(float4 vertexPos);
+void IntersectGroundPlane(Ray ray, inout RayHit bestHit);
+void IntersectCylinder(Ray ray, inout RayHit bestHit, Cylinder cylinder);
+float IntersectCylinder_internal(Ray ray, float3 center, Cylinder cylinder);
+void IntersectCone(Ray ray, inout RayHit bestHit, Cone cone);
+void IntersectTriangle(Ray ray, inout RayHit bestHit, float3x3 vtx, inout float3 tuv);
+
+float4 ComputeScreenPos(float4 vertexPos) {
+  float4 o = vertexPos * 0.5f;
+  o.xy = float2( o.x, o.y * 1.0f ) + o.w;
+  o.zw = vertexPos.zw;
+  return o;
+}
+
+void IntersectGroundPlane(Ray ray, inout RayHit bestHit) {
+  // Calculate distance along the ray where the ground plane is intersected.
+  float t = -ray.origin.y / ray.direction.y;
+  if (t > 0 && t < bestHit.distance) {
+    bestHit.distance = t;
+    bestHit.position = ray.origin + t * ray.direction;
+    bestHit.normal = float3( 0.0, -5.0, 0.0 );
+    bestHit.albedo = float3( 0.8, 0.8, 0.8 );
+    bestHit.specular = float3( 0.6, 0.6, 0.6 );
+  }
+}
+
+void IntersectCylinder(Ray ray, inout RayHit bestHit, Cylinder cylinder) {
+  // Calculate distance along the ray where the cone is intersected.    
+  // Line
+  float3 d = ray.direction;
+  float3 o = ray.origin;
+  float l = 0.0;
+  // Cylinder
+  float3 p = cylinder.position;
+  float r = cylinder.radius;
+  float h = cylinder.height;
+
+  float a = d.x * d.x + d.z * d.z;
+  float b = 2 * ( d.x * ( o.x - p.x ) + d.z * ( o.z - p.z ) );
+  float c = ( o.x - p.x ) * ( o.x - p.x ) + ( o.z - p.z ) * ( o.z - p.z ) - r * r;
+
+  float dter = b * b - 4 * a * c;
+  if (dter < 0.0) return;
+
+  float l1 = ( -b - sqrt(dter) ) / ( 2 * a );
+  float l2 = ( -b + sqrt(dter) ) / ( 2 * a );
+
+  // if (l1 > l2) l = l2;
+  // else l = l1;
+
+  float t = o.y + ( l1 - l2 > 0 ? l1 - l2 : l1 + l2 ) * d.y;
+
+  if (t >= p.y && t <= p.y + h) {
+    if (dter < bestHit.distance) {
+      bestHit.distance = dter;
+      bestHit.position = o + dter * d;
+      bestHit.normal = normalize(bestHit.position - p);
+    } else {
+      return;
+    }
+  }
+
+  // float a = ray.direction.x * ray.direction.x + ray.direction.z * ray.direction.z;
+  // float b = 2 * (ray.direction.x * (ray.origin.x - cylinder.position.x) + ray.direction.z * (ray.origin.z - cylinder.position.z));
+  // float c = (ray.origin.x - cylinder.position.x) * (ray.origin.x - cylinder.position.x) 
+  //   + (ray.origin.z - cylinder.position.z) * (ray.origin.z - cylinder.position.z) 
+  //   - (cylinder.radius * cylinder.radius);
+
+  // float d = b * b - 4 * a * c;
+
+  // if (d < 0.0) {
+  //     return;
+  // }
+
+  // float t1 = (-b - sqrt(d)) / (2 * a);
+  // float t2 = (-b + sqrt(d)) / (2 * a);
+  // float t = (float)0;
+
+  // if (t1 > t2) {
+  //     t = t2;
+  // } else {
+  //     t = t1;
+  // }
+
+  // float r = ray.origin.y + t * ray.direction.y;
+
+  // if (r >= cylinder.position.y && r <= cylinder.position.y + cylinder.height) {
+  //     if (d < bestHit.distance) {
+  //         bestHit.distance = d;
+  //         bestHit.position = ray.origin + d * ray.direction;
+  //         bestHit.normal = normalize(bestHit.position - cylinder.position);
+  //     }
+  // } else {
+  //     return;
+  // }
+}
+
+void IntersectCone(Ray ray, inout RayHit bestHit, Cone cone) {
+  float a1 = ray.origin.x - cone.position.x;
+  float b1 = ray.origin.z - cone.position.z;
+  float d1 = cone.height - ray.origin.y + cone.position.y;
+
+  float tan_ = ( cone.radius / cone.height ) * ( cone.radius / cone.height );
+
+  float a2 = ( ray.direction.x * ray.direction.x ) + ( ray.direction.z * ray.direction.z ) - ( tan_ * ( ray.direction.y * ray.direction.y ) );
+  float b2 = ( 2 * a1 * ray.direction.x ) + ( 2 * b1 * ray.direction.z ) + ( 2 * tan_ * d1 * ray.direction.y );
+  float c2 = ( a1 * a1 ) + ( b1 * b1 ) - ( tan_ * ( d1 * d1 ) );
+
+  float dt = b2 * b2 - 4 * ( a2 * c2 );
+  if (dt < 0.0) return;
+
+  float t1 = ( -b2 - sqrt(dt) ) / ( 2 * a2 );
+  float t2 = ( -b2 + sqrt(dt) ) / ( 2 * a2 );
+  float t;
+
+  if (t1 > t2) t = t2;
+  else t = t1;
+
+  float r = ray.origin.y + t * ray.direction.y;
+  if (r > cone.position.y && r < cone.position.y + cone.height) {
+    if (t < bestHit.distance) {
+      bestHit.distance = t;
+      bestHit.position = r;
+      bestHit.normal = normalize(bestHit.position - cone.position);
+    }
+  } else {
+    return;
+  }
+}
+
+void IntersectTriangle(Ray ray, inout RayHit bestHit, float3x3 vtx, inout float3 tuv) {
+  if (IntersectTriangle_MT97_internal(ray, vtx[0], vtx[1], vtx[2], tuv.x, tuv.y, tuv.z)) {
+    if (tuv.x > 0 && tuv.x < bestHit.distance) {
+      bestHit.distance = tuv.x;
+      bestHit.position = ray.origin + tuv.x * ray.direction;
+      bestHit.normal = normalize(cross(vtx[1] - vtx[0], vtx[2] - vtx[0]));
+      bestHit.albedo = 0.0;
+      bestHit.specular = 0.65f * float3( 1, 0.4f, 0.2f );
+    }
+  }
+}

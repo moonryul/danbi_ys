@@ -7,6 +7,7 @@ public class RTsphereLocator : MonoBehaviour {
   public uint SphereMaxAmount = 20;
   public float SpherePlacementRadiusOffset = 100.0f;
   public ComputeBuffer SpheresComputeBuf;
+  public RTsphere[] SpheresList;
 
   void OnDisable() {
     if (!SpheresComputeBuf.Null()) {
@@ -16,7 +17,7 @@ public class RTsphereLocator : MonoBehaviour {
   }
 
   public void LocateSphereRandomly() {
-    var spheresList = new List<RTsphere>();
+    SpheresList = new RTsphere[SphereMaxAmount];
     for (int i = 0; i < SphereMaxAmount; ++i) {
       var sphere = new RTsphere();
       // Setup the radius and the offsets.
@@ -25,7 +26,7 @@ public class RTsphereLocator : MonoBehaviour {
       Vector2 randPos = UnityEngine.Random.insideUnitSphere * SpherePlacementRadiusOffset;
       sphere.Position = new Vector3(randPos.x, sphere.Radius, randPos.y);
       // Reject spheres that are intersecting others.
-      foreach (var other in spheresList) {
+      foreach (var other in SpheresList) {
         float minDist = sphere.Radius + other.Radius;
         if (Vector3.SqrMagnitude(sphere.Position - other.Position) < minDist * minDist) {
           // if the distance is less than the radius of the two comparer,
@@ -40,15 +41,16 @@ public class RTsphereLocator : MonoBehaviour {
       bool isMetal = UnityEngine.Random.value < 0.5f;
       sphere.Albedo = isMetal ? Vector3.zero : randCol;
       sphere.Specular = isMetal ? randCol : Vector3.one * 0.04f;
+      sphere.Emission = sphere.Albedo;
       // Add the sphere into the list.
-      spheresList.Add(sphere);
+      SpheresList[i] = sphere;
 
     // continue to the next condition.
     SKIP_INITIALIZING_SPHERE:
       continue;
     }
     // Assign to compute shader.
-    SpheresComputeBuf = new ComputeBuffer(spheresList.Count, 52);
-    SpheresComputeBuf.SetData<RTsphere>(spheresList);
+    SpheresComputeBuf = new ComputeBuffer(SpheresList.Length, 52);
+    SpheresComputeBuf.SetData<RTsphere>(new List<RTsphere>(SpheresList));
   }
 };

@@ -10,14 +10,14 @@ public class RTmeshObject : MonoBehaviour {
   /// To rebuild every mesh objects!
   /// </summary>
   public virtual void OnEnable() {
-    RThelper.RegisterToRTobject(this);
-    RThelper.DoesNeedToRebuildRTobjects = true;
+    RTcomputeShaderHelper.RegisterToRTobject(this);
+    RTcomputeShaderHelper.DoesNeedToRebuildRTobjects = true;
   }
   /// <summary>
   /// OnDisable(), all the references inside the RTmeshObjectsList is removed.
   /// </summary>
   public virtual void OnDisable() {
-    RThelper.UnregisterToRTobject(this);
-    RThelper.DoesNeedToRebuildRTobjects = true;
+    RTcomputeShaderHelper.UnregisterToRTobject(this);
+    RTcomputeShaderHelper.DoesNeedToRebuildRTobjects = true;
   }
 };

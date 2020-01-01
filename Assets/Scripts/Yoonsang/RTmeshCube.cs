@@ -22,28 +22,29 @@ public class RTmeshCube : RTmeshObject {
   public override void OnDisable() { base.OnDisable(); }
 
   void SetVertexColor() {
-    var col = new Color[ThisMesh.vertices.Length];
+    int len = ThisMesh.vertices.Length;
+    var col = new Color[len];
     switch (VtxColor) {
       case eCurrentVertexColor.RED:
-      for (int i = 0; i < ThisMesh.vertices.Length; ++i) {
+      for (int i = 0; i < len; ++i) {
         col[i] = Color.red;
       }
       break;
 
       case eCurrentVertexColor.GREEN:
-      for (int i = 0; i < ThisMesh.vertices.Length; ++i) {
+      for (int i = 0; i < len; ++i) {
         col[i] = Color.green;
       }
       break;
 
       case eCurrentVertexColor.BLUE:
-      for (int i = 0; i < ThisMesh.vertices.Length; ++i) {
+      for (int i = 0; i < len; ++i) {
         col[i] = Color.blue;
       }
       break;
 
       case eCurrentVertexColor.MAGENTA:
-      for (int i = 0; i < ThisMesh.vertices.Length; ++i) {
+      for (int i = 0; i < len; ++i) {
         col[i] = Color.magenta;
       }
       break;

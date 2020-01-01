@@ -33,7 +33,6 @@ struct RayHit {
   float3 albedo;
   float3 specular;
   float3 emission;
-  int useVertexCol;
 };
 
 struct Sphere {
@@ -41,6 +40,7 @@ struct Sphere {
   float radius;
   float3 albedo;
   float3 specular;
+  float3 emission;
 };
 
 StructuredBuffer<Sphere> _Spheres;
@@ -70,26 +70,20 @@ int _MeshCount;
 StructuredBuffer<MeshObject> _MeshObjects;
 StructuredBuffer<float3> _Vertices;
 StructuredBuffer<int> _Indices;
-RWStructuredBuffer<float4> _Colors;
+StructuredBuffer<float3> _Colors;
 
 //
 //  Functions.
 //
-float4 ComputeScreenPos(float4 vertexPos);
+
 Ray CreateRay(float3 origin, float direction);
 RayHit CreateRayHit();
 Ray CreateCameraRay(float2 uv);
 void IntersectSphere(Ray ray, inout RayHit bestHit, Sphere sphere);
-//void IntersectGroundPlane(Ray ray, inout RayHit bestHit);
-void IntersectCylinder(Ray ray, inout RayHit bestHit, Cylinder cylinder);
-float IntersectCylinder_internal(Ray ray, float3 center, Cylinder cylinder);
-void IntersectCone(Ray ray, inout RayHit bestHit, Cone cone);
-void IntersectTriangle(Ray ray, inout RayHit bestHit, float3x3 vtx, inout float3 tuv);
-bool IntersectTriangle_MT97_internal(Ray ray, float3 v0, float3 v1, float3 v2, inout float t, inout float u, inout float v);
-void IntersectMesh(Ray ray, inout RayHit bestHit, MeshObject mesh);
+bool IntersectTriangle_MT97_internal(Ray ray, float3x3 vtx, inout float3 tuv, int useCull);
+void IntersectMesh(Ray ray, inout RayHit bestHit, MeshObject mesh, int round);
 RayHit Trace(Ray ray);
 float3 Shade(inout Ray ray, RayHit hit);
-//float3 ShadeCubeGradually(float3 col);
 
 [numthreads(8, 8, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID) {
@@ -111,13 +105,6 @@ void CSMain(uint3 id : SV_DispatchThreadID) {
   _Result[id.xy] = float4( res, 1.0 );
 }
 
-float4 ComputeScreenPos(float4 vertexPos) {
-  float4 o = vertexPos * 0.5f;
-  o.xy = float2( o.x, o.y * 1.0f ) + o.w;
-  o.zw = vertexPos.zw;
-  return o;
-}
-
 Ray CreateRay(float3 origin, float3 direction) {
   Ray ray;
   ray.energy = float3( 1.0, 1.0, 1.0 );
@@ -135,20 +122,17 @@ RayHit CreateRayHit() {
   hit.albedo = float3( 0.0, 0.0, 0.0 );
   hit.specular = float3( 0.0, 0.0, 0.0 );
   hit.emission = float3( 0.0, 0.0, 0.0 );
-  hit.useVertexCol = 0;
   return hit;
 }
 
-void IntersectGroundPlane(Ray ray, inout RayHit bestHit) {
-  // Calculate distance along the ray where the ground plane is intersected.
-  float t = -ray.origin.y / ray.direction.y;
-  if (t > 0 && t < bestHit.distance) {
-    bestHit.distance = t;
-    bestHit.position = ray.origin + t * ray.direction;
-    bestHit.normal = float3( 0.0, -5.0, 0.0 );
-    bestHit.albedo = float3( 0.8, 0.8, 0.8 );
-    bestHit.specular = float3( 0.6, 0.6, 0.6 );
-  }
+Ray CreateCameraRay(float2 uv) {
+  // Transform the camera origin to world space.
+  float3 origin = mul(_CameraToWorld, float4( 0.0f, 0.0f, 0.0f, 1.0f )).xyz;
+  // Invert the perspective projection of the view-space position.
+  float3 direction = mul(_CameraInverseProjection, float4( uv, 0.0f, 1.0f )).xyz;
+  //Transform the direction from camera to world space and normalize.
+  direction = normalize(mul(_CameraToWorld, float4( direction, 0.0f )).xyz);
+  return CreateRay(origin, direction);
 }
 
 void IntersectSphere(Ray ray, inout RayHit bestHit, Sphere sphere) {
@@ -165,193 +149,77 @@ void IntersectSphere(Ray ray, inout RayHit bestHit, Sphere sphere) {
     bestHit.normal = normalize(bestHit.position - sphere.position);
     bestHit.albedo = sphere.albedo;
     bestHit.specular = sphere.specular;
-    bestHit.emission = ( float3 )0;
-    bestHit.useVertexCol = 0;
+    bestHit.emission = sphere.emission; 
   }
 }
 
-void IntersectCylinder(Ray ray, inout RayHit bestHit, Cylinder cylinder) {
-  // Calculate distance along the ray where the cone is intersected.    
-  // Line
-  float3 d = ray.direction;
-  float3 o = ray.origin;
-  float l = 0.0;
-  // Cylinder
-  float3 p = cylinder.position;
-  float r = cylinder.radius;
-  float h = cylinder.height;
-
-  float a = d.x * d.x + d.z * d.z;
-  float b = 2 * ( d.x * ( o.x - p.x ) + d.z * ( o.z - p.z ) );
-  float c = ( o.x - p.x ) * ( o.x - p.x ) + ( o.z - p.z ) * ( o.z - p.z ) - r * r;
-
-  float dter = b * b - 4 * a * c;
-  if (dter < 0.0) return;
-
-  float l1 = ( -b - sqrt(dter) ) / ( 2 * a );
-  float l2 = ( -b + sqrt(dter) ) / ( 2 * a );
-
-  // if (l1 > l2) l = l2;
-  // else l = l1;
-
-  float t = o.y + ( l1 - l2 > 0 ? l1 - l2 : l1 + l2 ) * d.y;
-
-  if (t >= p.y && t <= p.y + h) {
-    if (dter < bestHit.distance) {
-      bestHit.distance = dter;
-      bestHit.position = o + dter * d;
-      bestHit.normal = normalize(bestHit.position - p);
-    } else {
-      return;
-    }
-  }
-
-  // float a = ray.direction.x * ray.direction.x + ray.direction.z * ray.direction.z;
-  // float b = 2 * (ray.direction.x * (ray.origin.x - cylinder.position.x) + ray.direction.z * (ray.origin.z - cylinder.position.z));
-  // float c = (ray.origin.x - cylinder.position.x) * (ray.origin.x - cylinder.position.x) 
-  //   + (ray.origin.z - cylinder.position.z) * (ray.origin.z - cylinder.position.z) 
-  //   - (cylinder.radius * cylinder.radius);
-
-  // float d = b * b - 4 * a * c;
-
-  // if (d < 0.0) {
-  //     return;
-  // }
-
-  // float t1 = (-b - sqrt(d)) / (2 * a);
-  // float t2 = (-b + sqrt(d)) / (2 * a);
-  // float t = (float)0;
-
-  // if (t1 > t2) {
-  //     t = t2;
-  // } else {
-  //     t = t1;
-  // }
-
-  // float r = ray.origin.y + t * ray.direction.y;
-
-  // if (r >= cylinder.position.y && r <= cylinder.position.y + cylinder.height) {
-  //     if (d < bestHit.distance) {
-  //         bestHit.distance = d;
-  //         bestHit.position = ray.origin + d * ray.direction;
-  //         bestHit.normal = normalize(bestHit.position - cylinder.position);
-  //     }
-  // } else {
-  //     return;
-  // }
-}
-
-void IntersectCone(Ray ray, inout RayHit bestHit, Cone cone) {
-  float a1 = ray.origin.x - cone.position.x;
-  float b1 = ray.origin.z - cone.position.z;
-  float d1 = cone.height - ray.origin.y + cone.position.y;
-
-  float tan_ = ( cone.radius / cone.height ) * ( cone.radius / cone.height );
-
-  float a2 = ( ray.direction.x * ray.direction.x ) + ( ray.direction.z * ray.direction.z ) - ( tan_ * ( ray.direction.y * ray.direction.y ) );
-  float b2 = ( 2 * a1 * ray.direction.x ) + ( 2 * b1 * ray.direction.z ) + ( 2 * tan_ * d1 * ray.direction.y );
-  float c2 = ( a1 * a1 ) + ( b1 * b1 ) - ( tan_ * ( d1 * d1 ) );
-
-  float dt = b2 * b2 - 4 * ( a2 * c2 );
-  if (dt < 0.0) return;
-
-  float t1 = ( -b2 - sqrt(dt) ) / ( 2 * a2 );
-  float t2 = ( -b2 + sqrt(dt) ) / ( 2 * a2 );
-  float t;
-
-  if (t1 > t2) t = t2;
-  else t = t1;
-
-  float r = ray.origin.y + t * ray.direction.y;
-  if (r > cone.position.y && r < cone.position.y + cone.height) {
-    if (t < bestHit.distance) {
-      bestHit.distance = t;
-      bestHit.position = r;
-      bestHit.normal = normalize(bestHit.position - cone.position);
-    }
-  } else {
-    return;
-  }
-}
-
-Ray CreateCameraRay(float2 uv) {
-  // Transform the camera origin to world space.
-  float3 origin = mul(_CameraToWorld, float4( 0.0f, 0.0f, 0.0f, 1.0f )).xyz;
-  // Invert the perspective projection of the view-space position.
-  float3 direction = mul(_CameraInverseProjection, float4( uv, 0.0f, 1.0f )).xyz;
-  //Transform the direction from camera to world space and normalize.
-  direction = normalize(mul(_CameraToWorld, float4( direction, 0.0f )).xyz); 
-  return CreateRay(origin, direction);
-}
-
-void IntersectTriangle(Ray ray, inout RayHit bestHit, float3x3 vtx, inout float3 tuv) {
-  if (IntersectTriangle_MT97_internal(ray, vtx[0], vtx[1], vtx[2], tuv.x, tuv.y, tuv.z)) {
-    if (tuv.x > 0 && tuv.x < bestHit.distance) {
-      bestHit.distance = tuv.x;
-      bestHit.position = ray.origin + tuv.x * ray.direction;
-      bestHit.normal = normalize(cross(vtx[1] - vtx[0], vtx[2] - vtx[0]));
-      bestHit.albedo = 0.0;
-      bestHit.specular = 0.65f * float3( 1, 0.4f, 0.2f );
-    }
-  }
-}
-
-bool IntersectTriangle_MT97_internal(Ray ray, float3 v0, float3 v1, float3 v2, inout float t, inout float u, inout float v) {
+bool IntersectTriangle_MT97_internal(Ray ray, float3x3 vtx, inout float3 tuv, int useCull) {
   // find vectors for two edges sharing vert0.
-  float3 edge1 = v1 - v0;
-  float3 edge2 = v2 - v0;
+  float3 edge1 = vtx[1] - vtx[0];
+  float3 edge2 = vtx[2] - vtx[0];
   // begin calculating determinant - also used to calculate U parameter.
   float3 pvec = cross(ray.direction, edge2);
   // if determinant is near zero, ray lies in plane of triangle.
   float dter = dot(edge1, pvec);
   // use backface culling.
-  if (dter < EPS) {
-    return false;
+  if (useCull == 0) {
+    if (dter < EPS) {
+      return false;
+    }
   }
+
+  /*if (useCull == 0) {
+    if (dter > EPS) {
+      return false;
+    }
+  }*/
+  /*if (dter < EPS) {
+    return false;
+  }*/
+
   float inv_dter = 1.0f / dter;
-  // calculate distance from v0 to ray origin.
-  float3 tvec = ray.origin - v0;
+  // calculate distance from vtx[0] to ray origin.
+  float3 tvec = ray.origin - vtx[0];
   // calculate U paramter and test bounds.
-  u = dot(tvec, pvec) * inv_dter;
-  if (u < 0.0 || u > 1.0) {
+  tuv.y = dot(tvec, pvec) * inv_dter;
+  if (tuv.y < 0.0 || tuv.y > 1.0) {
     return false;
   }
   // prepare to test v pararmeter.
   float3 qvec = cross(tvec, edge1);
   // calculate v parameter and test bounds.
-  v = dot(ray.direction, qvec) * inv_dter;
-  if (v < 0.0 || u + v > 1.0) {
+  tuv.z = dot(ray.direction, qvec) * inv_dter;
+  if (tuv.z < 0.0 || tuv.y + tuv.z > 1.0) {
     return false;
   }
   // calculate t, ray intersects triangle.
-  t = dot(edge2, qvec) * inv_dter;
+  tuv.x = dot(edge2, qvec) * inv_dter;
   return true;
 }
 
-void IntersectMesh(Ray ray, inout RayHit bestHit, MeshObject mesh) {
+void IntersectMesh(Ray ray, inout RayHit bestHit, MeshObject mesh, int round) {
   uint offset = mesh.indices_offset;
-  uint count = mesh.indices_count;
-  for (uint i = 0; i < count; ++i) {
-    float3 v0 = ( mul(mesh.localToWorldMatrix, float4( _Vertices[_Indices[i]], 1 )) ).xyz;
-    float3 v1 = ( mul(mesh.localToWorldMatrix, float4( _Vertices[_Indices[i + 1]], 1 )) ).xyz;
-    float3 v2 = ( mul(mesh.localToWorldMatrix, float4( _Vertices[_Indices[i + 2]], 1 )) ).xyz;
+  uint count = mesh.indices_count + offset;
+
+  for (uint i = offset; i < count; i += 3) {   
+    float3x3 vtx = float3x3( mul(mesh.localToWorldMatrix, float4( _Vertices[_Indices[i]], 1 )).xyz,
+                            mul(mesh.localToWorldMatrix, float4( _Vertices[_Indices[i + 1]], 1 )).xyz,
+                            mul(mesh.localToWorldMatrix, float4( _Vertices[_Indices[i + 2]], 1 )).xyz );
 
     float3 tuv = ( float3 )0;
-    if (IntersectTriangle_MT97_internal(ray, v0, v1, v2, tuv.x, tuv.y, tuv.z)) {
+    if (IntersectTriangle_MT97_internal(ray, vtx, tuv, mesh.use_vertex_color)) {
       if (tuv.x > 0 && tuv.x < bestHit.distance) {
+        // get color from the interpolated.
+        /*float3 averageCol = _Colors[_Indices[i]] + _Colors[_Indices[i + 1]] + _Colors[_Indices[i + 2]];
+        averageCol /= 3;*/
         bestHit.distance = tuv.x;
         bestHit.position = ray.origin + tuv.x * ray.direction;
-        bestHit.normal = normalize(cross(v1 - v0, v2 - v0));
-        bestHit.albedo = 0.0f;
-        bestHit.specular = 0.65f;
-        bestHit.useVertexCol = mesh.use_vertex_color;
-
-        // get color from the interpolated.
-        //float3 averageCol = _Colors[_Indices[i]] + _Colors[_Indices[i + 1]] + _Colors[_Indices[i + 2]];
-        //averageCol /= 3;
-        //bestHit.emission = averageCol;
-        bestHit.emission = float3( 1, 0, 0 );
-        //bestHit.emission = mesh.use_vertex_color == 1 ?  : (float3)0;
+        bestHit.normal = normalize(cross(vtx[0], vtx[2] - vtx[0]));
+        //bestHit.albedo = mesh.use_vertex_color == 1 ? averageCol : float3( 0, 0.3, 0 );
+        bestHit.albedo = ( float3 )0;
+        bestHit.specular = 0.65f;        
+                
+        bestHit.emission = mesh.use_vertex_color == 1 && round > 0 ? _Colors[round * 3] : ( float3 )0.01;
 
         // constant red color for a test.
         //bestHit.emission = float3(1, 0, 0);
@@ -380,18 +248,17 @@ RayHit Trace(Ray ray) {
   // cone.radius = 2.5;
 
   RayHit bestHit = CreateRayHit();
+  uint count, stride;
 
-  //IntersectCylinder(ray, bestHit, cylinder);
-  uint numSpheres, sphere_stride;
-  _Spheres.GetDimensions(numSpheres, sphere_stride);
-  for (uint i = 0; i < numSpheres; ++i) {
-    IntersectSphere(ray, bestHit, _Spheres[i]);
-  }
+  /*
+  _Spheres.GetDimensions(count, stride);
+  for (uint j = 0; j < count; ++j) {
+    IntersectSphere(ray, bestHit, _Spheres[j]);
+  }*/
 
-  uint count, mesh_stride;
-  _MeshObjects.GetDimensions(count, mesh_stride);
+  _MeshObjects.GetDimensions(count, stride);
   for (uint i = 0; i < count; ++i) {
-    IntersectMesh(ray, bestHit, _MeshObjects[i]);
+    IntersectMesh(ray, bestHit, _MeshObjects[i], i);
   }
 
   // IntersectSphere(ray, bestHit, sphere);
@@ -416,19 +283,13 @@ RayHit Trace(Ray ray) {
 }
 
 float3 Shade(inout Ray ray, RayHit hit) {
-  //float3 albedo = float3(0.8, 0.8, 0.8);
-
   // Less than Infinity!
   if (hit.distance < 1.#INF) {
     float3 spec = float3( 0.6, 0.6, 0.6 );
     // Reflect the ray and multiply energy with specular reflection.
     ray.origin = hit.position + hit.normal * 0.001;
     ray.direction = reflect(ray.direction, hit.normal);
-    ray.energy *= spec;
-
-    // if (hit.useVertexCol) {
-    //     return ShadeCubeGradually(hit.emission);
-    // }
+    ray.energy *= hit.specular;
 
     // bool useShadow = false;
     // Ray shadowRay = CreateRay(hit.position + hit.normal * 0.001, -1 * _DirectionalLight.xyz);
@@ -438,16 +299,17 @@ float3 Shade(inout Ray ray, RayHit hit) {
     // }
 
     // saturate() : The x parameter, clamped within the range of 0 to 1.
-    return saturate(dot(hit.normal, _DirectionalLight.xyz) * -1) * _DirectionalLight.w; //+ hit.emission;
-    //return hit.emission;        
+    //return saturate(dot(hit.normal, _DirectionalLight.xyz) * -1) * _DirectionalLight.w + hit.emission;
+    return hit.emission;// * hit.emission;
   } else {
     // Erase the ray's energy - the sky doesn't reflect anything.
     ray.energy = ( float3 )0.0;
-    // Sample the skybox and write it.
-    float theta = acos(ray.direction.y) / -PI;
+    // 1. Sample the skybox and write it.
+    /*float theta = acos(ray.direction.y) / -PI;
     float phi = atan2(ray.direction.x, -ray.direction.z) / -PI * 0.5;
-    return _SkyboxTexture.SampleLevel(sampler_SkyboxTexture, float2( phi, theta ), 0).xyz;
-    //return (float3)0;
-    //return saturate(dot(hit.normal, _DirectionalLight.xyz) * -1) * _DirectionalLight.w * hit.emission;
+    return _SkyboxTexture.SampleLevel(sampler_SkyboxTexture, float2( phi, theta ), 0).xyz;        */
+
+    // 2. draw with constant Black color.
+    return ( float3 )0;
   }
 }
