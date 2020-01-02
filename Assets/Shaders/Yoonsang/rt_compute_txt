@@ -1,4 +1,17 @@
-﻿float4 ComputeScreenPos(float4 vertexPos);
+﻿struct Cylinder {
+  float3 position;
+  float radius;
+  float height;
+  float3 top_position;
+};
+
+struct Cone {
+  float3 position;
+  float radius;
+  float height;
+};
+
+float4 ComputeScreenPos(float4 vertexPos);
 void IntersectGroundPlane(Ray ray, inout RayHit bestHit);
 void IntersectCylinder(Ray ray, inout RayHit bestHit, Cylinder cylinder);
 float IntersectCylinder_internal(Ray ray, float3 center, Cylinder cylinder);

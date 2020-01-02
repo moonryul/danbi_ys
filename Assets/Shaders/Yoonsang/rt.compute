@@ -45,19 +45,6 @@ struct Sphere {
 
 StructuredBuffer<Sphere> _Spheres;
 
-struct Cylinder {
-  float3 position;
-  float radius;
-  float height;
-  float3 top_position;
-};
-
-struct Cone {
-  float3 position;
-  float radius;
-  float height;
-};
-
 struct MeshObject {
   float4x4 localToWorldMatrix;
   int indices_offset;
@@ -66,7 +53,6 @@ struct MeshObject {
   int padding;
 };
 
-int _MeshCount;
 StructuredBuffer<MeshObject> _MeshObjects;
 StructuredBuffer<float3> _Vertices;
 StructuredBuffer<int> _Indices;
@@ -149,7 +135,7 @@ void IntersectSphere(Ray ray, inout RayHit bestHit, Sphere sphere) {
     bestHit.normal = normalize(bestHit.position - sphere.position);
     bestHit.albedo = sphere.albedo;
     bestHit.specular = sphere.specular;
-    bestHit.emission = sphere.emission; 
+    bestHit.emission = sphere.emission;
   }
 }
 
@@ -162,20 +148,21 @@ bool IntersectTriangle_MT97_internal(Ray ray, float3x3 vtx, inout float3 tuv, in
   // if determinant is near zero, ray lies in plane of triangle.
   float dter = dot(edge1, pvec);
   // use backface culling.
-  if (useCull == 0) {
+  /*if (useCull == 0) {
     if (dter < EPS) {
       return false;
     }
-  }
+  }*/  
 
   /*if (useCull == 0) {
     if (dter > EPS) {
       return false;
     }
   }*/
-  /*if (dter < EPS) {
+
+  if (dter < EPS) {
     return false;
-  }*/
+  }
 
   float inv_dter = 1.0f / dter;
   // calculate distance from vtx[0] to ray origin.
@@ -201,7 +188,7 @@ void IntersectMesh(Ray ray, inout RayHit bestHit, MeshObject mesh, int round) {
   uint offset = mesh.indices_offset;
   uint count = mesh.indices_count + offset;
 
-  for (uint i = offset; i < count; i += 3) {   
+  for (uint i = offset; i < count; i += 3) {
     float3x3 vtx = float3x3( mul(mesh.localToWorldMatrix, float4( _Vertices[_Indices[i]], 1 )).xyz,
                             mul(mesh.localToWorldMatrix, float4( _Vertices[_Indices[i + 1]], 1 )).xyz,
                             mul(mesh.localToWorldMatrix, float4( _Vertices[_Indices[i + 2]], 1 )).xyz );
@@ -214,11 +201,11 @@ void IntersectMesh(Ray ray, inout RayHit bestHit, MeshObject mesh, int round) {
         averageCol /= 3;*/
         bestHit.distance = tuv.x;
         bestHit.position = ray.origin + tuv.x * ray.direction;
-        bestHit.normal = normalize(cross(vtx[0], vtx[2] - vtx[0]));
+        bestHit.normal = normalize(cross(vtx[1] - vtx[0], vtx[2] - vtx[0]));
         //bestHit.albedo = mesh.use_vertex_color == 1 ? averageCol : float3( 0, 0.3, 0 );
         bestHit.albedo = ( float3 )0;
-        bestHit.specular = 0.65f;        
-                
+        bestHit.specular = 0.65f;
+
         bestHit.emission = mesh.use_vertex_color == 1 && round > 0 ? _Colors[round * 3] : ( float3 )0.01;
 
         // constant red color for a test.
@@ -305,11 +292,11 @@ float3 Shade(inout Ray ray, RayHit hit) {
     // Erase the ray's energy - the sky doesn't reflect anything.
     ray.energy = ( float3 )0.0;
     // 1. Sample the skybox and write it.
-    /*float theta = acos(ray.direction.y) / -PI;
+    float theta = acos(ray.direction.y) / -PI;
     float phi = atan2(ray.direction.x, -ray.direction.z) / -PI * 0.5;
-    return _SkyboxTexture.SampleLevel(sampler_SkyboxTexture, float2( phi, theta ), 0).xyz;        */
+    return _SkyboxTexture.SampleLevel(sampler_SkyboxTexture, float2( phi, theta ), 0).xyz;        
 
     // 2. draw with constant Black color.
-    return ( float3 )0;
+    //return ( float3 )0;
   }
 }

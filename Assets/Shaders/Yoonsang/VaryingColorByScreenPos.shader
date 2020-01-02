@@ -5,7 +5,7 @@
     SubShader {
       Tags { "RenderType" = "Opaque" }
       LOD 100
-      Cull off
+      //Cull off
       
       Pass {
           CGPROGRAM
