@@ -8,13 +8,13 @@ float4x4 _CameraToWorld;
 float4x4 _CameraInverseProjection;
 Texture2D<float4> _SkyboxTexture;
 SamplerState sampler_SkyboxTexture;
+
+Texture2D<float4> _TargetTexture;
+SamplerState sampler_TargetTexture;
 float2 _PixelOffset;
 float4 _Time;
 float4 _DirectionalLight;
-//uint _ScreenDimensionX;
-//uint _ScreenDimensionY;
-//float4 _ScreenPixelPos;
-int _Bounces;
+int _RayBounceCountMax;
 
 static const float PI2 = 6.28318528f;
 static const float PI = 3.14159265f;
@@ -47,16 +47,18 @@ StructuredBuffer<Sphere> _Spheres;
 
 struct MeshObject {
   float4x4 localToWorldMatrix;
-  int indices_offset;
-  int indices_count;
-  int use_vertex_color;
+  int indicesStride;
+  int indicesCount;
+  int colorMode;
   int padding;
 };
 
 StructuredBuffer<MeshObject> _MeshObjects;
 StructuredBuffer<float3> _Vertices;
 StructuredBuffer<int> _Indices;
-StructuredBuffer<float3> _Colors;
+//StructuredBuffer<float3> _VertexColors;
+StructuredBuffer<float3> _TextureColors;
+StructuredBuffer<float2> _UVs;
 
 //
 //  Functions.
@@ -81,7 +83,7 @@ void CSMain(uint3 id : SV_DispatchThreadID) {
   Ray ray = CreateCameraRay(uv);
   // Trace and shade.
   float3 res = ( float3 )0;
-  for (int i = 0; i < _Bounces; ++i) {
+  for (int i = 0; i < _RayBounceCountMax; ++i) {
     RayHit hit = Trace(ray);
     res += ray.energy * Shade(ray, hit);
     // any() : True if any components of the x parameter are non-zero; otherwise, false.
@@ -139,7 +141,7 @@ void IntersectSphere(Ray ray, inout RayHit bestHit, Sphere sphere) {
   }
 }
 
-bool IntersectTriangle_MT97_internal(Ray ray, float3x3 vtx, inout float3 tuv, int useCull) {
+bool IntersectTriangle_MT97_internal(Ray ray, float3x3 vtx, inout float3 tuv, int colorMode) {
   // find vectors for two edges sharing vert0.
   float3 edge1 = vtx[1] - vtx[0];
   float3 edge2 = vtx[2] - vtx[0];
@@ -148,21 +150,23 @@ bool IntersectTriangle_MT97_internal(Ray ray, float3x3 vtx, inout float3 tuv, in
   // if determinant is near zero, ray lies in plane of triangle.
   float dter = dot(edge1, pvec);
   // use backface culling.
+  // cull the back face
   /*if (useCull == 0) {
     if (dter < EPS) {
       return false;
     }
   }*/
 
+  // cull the front face
   /*if (useCull == 0) {
     if (dter > EPS) {
       return false;
     }
   }*/
 
-  if (dter < EPS) {
+  /*if (dter < EPS) {
     return false;
-  }
+  }*/
 
   float inv_dter = 1.0f / dter;
   // calculate distance from vtx[0] to ray origin.
@@ -185,31 +189,52 @@ bool IntersectTriangle_MT97_internal(Ray ray, float3x3 vtx, inout float3 tuv, in
 }
 
 void IntersectMesh(Ray ray, inout RayHit bestHit, MeshObject mesh, int round) {
-  uint offset = mesh.indices_offset;
-  uint count = mesh.indices_count + offset;
-
+  uint offset = mesh.indicesStride;
+  uint count = mesh.indicesCount + offset;
+  int flag = 0;
   for (uint i = offset; i < count; i += 3) {
     float3x3 vtx = float3x3( mul(mesh.localToWorldMatrix, float4( _Vertices[_Indices[i]], 1 )).xyz,
                             mul(mesh.localToWorldMatrix, float4( _Vertices[_Indices[i + 1]], 1 )).xyz,
                             mul(mesh.localToWorldMatrix, float4( _Vertices[_Indices[i + 2]], 1 )).xyz );
 
     float3 tuv = ( float3 )0;
-    if (IntersectTriangle_MT97_internal(ray, vtx, tuv, mesh.use_vertex_color)) {
-      if (tuv.x > 0 && tuv.x < bestHit.distance) {
-        // get color from the interpolated.
-        /*float3 averageCol = _Colors[_Indices[i]] + _Colors[_Indices[i + 1]] + _Colors[_Indices[i + 2]];
-        averageCol /= 3;*/
+    if (IntersectTriangle_MT97_internal(ray, vtx, tuv, mesh.colorMode)) {
+      if (tuv.x > 0.0 && tuv.x < bestHit.distance) {
+        // get color from the interpolated.        
         bestHit.distance = tuv.x;
         bestHit.position = ray.origin + tuv.x * ray.direction;
         bestHit.normal = normalize(cross(vtx[1] - vtx[0], vtx[2] - vtx[0]));
-        //bestHit.albedo = mesh.use_vertex_color == 1 ? averageCol : float3( 0, 0.3, 0 );
         bestHit.albedo = ( float3 )0;
-        bestHit.specular = 0.65f;
+        bestHit.specular = 0.5f;
+        switch (mesh.colorMode) {
+          // Nothing to do.
+        case 0:
+        bestHit.emission = ( float3 ) 0.01f;
+        break;
 
-        bestHit.emission = mesh.use_vertex_color == 1 ? _Colors[( round + 1 ) * 3] : ( float3 )0.01;
+        // Texture colors.
+        case 1:
+        // <see href="https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-samplelevel">HERE</href>
+        // SampleLevel -> is similar to Sample except that is uses the LOD level (in the last component of the location parameter) 
+        // to choose the mipmap level. For example, a 2D texture uses the first two components for uv coordinates and the third
+        // component for the mipmap level.
+        bestHit.emission = _TargetTexture.SampleLevel(
+          sampler_TargetTexture,
+          flag == 0 ? float2( tuv.y, tuv.z ) : float2( -tuv.z, tuv.z ), 0).xyz;
 
-        // constant red color for a test.
-        //bestHit.emission = float3(1, 0, 0);
+        if (flag == 0) {
+          flag = 1;
+        }
+        if (flag == 1) {
+          flag = 0;
+        }
+        break;
+
+        // Vertex colors.
+        /*case 2:
+        bestHit.emission = _VertexColors[( round + 1 ) * 3];
+        break;*/
+        }
       }
     }
   }

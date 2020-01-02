@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// 
+/// Vertex colors to apply to the result.
 /// </summary>
 [System.Serializable]
 public enum eCurrentVertexColor {
@@ -15,8 +15,11 @@ public class RTmeshCube : RTmeshObject {
   Mesh ThisMesh;
 
   public override void OnEnable() {
-    ThisMesh = GetComponent<MeshFilter>().sharedMesh;
-    SetVertexColor();
+    // if this mesh requires the vertex colors.
+    if (ColorMode == eColorMode.VERTEX_COLOR) {
+      ThisMesh = GetComponent<MeshFilter>().sharedMesh;
+      SetVertexColor();
+    }    
     base.OnEnable();
   }
   public override void OnDisable() { base.OnDisable(); }

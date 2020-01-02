@@ -1,6 +1,8 @@
-﻿using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 
+/// <summary>
+/// Ray Tracer masters that controls and assemble everything of the ray tracer.
+/// </summary>
 [RequireComponent(typeof(Camera))]
 public class RTmaster : MonoBehaviour {
   [Header("Bounced amount of Ray Tracing (default = 2)"), Space(5)]
@@ -57,6 +59,11 @@ public class RTmaster : MonoBehaviour {
     ResampleAddMat = new Material(Shader.Find("Hidden/AddShader"));
   }
 
+  /// <summary>
+  /// It's callbacked only by Camera component.
+  /// </summary>
+  /// <param name="source"></param>
+  /// <param name="destination"></param>
   void OnRenderImage(RenderTexture source, RenderTexture destination) {
     Debug.Assert(!RTshader.Null(), $"Ray tracing compute shader cannot be null!");
     // Rebuild the mesh objects if new mesh objects are coming up.
@@ -76,7 +83,7 @@ public class RTmaster : MonoBehaviour {
     // Retrieve the data from the vertex color buffer.
     //if (dbg.RetrivedColBuf == null) { 
     //  dbg.RetrivedColBuf = new Vector3[Helper.VtxColorsList.Count];
-    //}
+    //}    
 
     //Helper.VtxColorsComputeBuf.GetData(dbg.RetrivedColBuf);
     //for (int i = 0; i < dbg.RetrivedColBuf.Length; ++i) {
@@ -92,10 +99,14 @@ public class RTmaster : MonoBehaviour {
       transform.hasChanged = false;
     }
 
-    SetShaderParamsRuntime();
+    SetShaderParamsAtRuntime();
     //RayTracingShader.SetTexture(0, "_SkyboxTexture", _Video.mainTexture);
   }
 
+  /// <summary>
+  /// 
+  /// </summary>
+  /// <param name="destination"></param>
   void Render(RenderTexture destination) {
     // Make sure we have a current render target
     RefreshRenderTarget();
@@ -118,6 +129,10 @@ public class RTmaster : MonoBehaviour {
     //}
   }
 
+  /// <summary>
+  /// Render Target for RT must be refreshed on every render due to
+  /// keep printing on the result.
+  /// </summary>
   void RefreshRenderTarget() {
     if (ResultRenderTex.Null()
       || ResultRenderTex.width != Screen.width
@@ -136,34 +151,65 @@ public class RTmaster : MonoBehaviour {
     }
   }
 
+  /// <summary>
+  /// Set the Shader paramter into the ray tracer.
+  /// </summary>
   void SetShaderParams() {
-    RTshader.SetInt("_Bounces", Bounce);
-    RTshader.SetVector("_PixelOffset",
-                       new Vector2(UnityEngine.Random.value, UnityEngine.Random.value));
+    // Set the maximum count of ray bounces.
+    RTshader.SetInt("_RayBounceCountMax", Bounce);
+    // Set the pixel offset for screen uv.
+    RTshader.SetVector("_PixelOffset", new Vector2(UnityEngine.Random.value, UnityEngine.Random.value));
+    // Set the skybox texture.
     RTshader.SetTexture(0, "_SkyboxTexture", SkyboxTex);
+    // Set the target texture.
+    RTshader.SetTexture(0, "_TargetTexture", Helper.TargetTextures[0]);
+    // Set the Camera to the World matrix.
     RTshader.SetMatrix("_CameraToWorld", MainCamRef.cameraToWorldMatrix);
+    // Set the inversed projection matrix.
     RTshader.SetMatrix("_CameraInverseProjection", MainCamRef.projectionMatrix.inverse);
 
-    var light_dir = DirLight.transform.forward;
-    RTshader.SetVector("_DirectionalLight",
-                       new Vector4(light_dir.x, light_dir.y, light_dir.z, DirLight.intensity));
+    // Set the light attributes.
+    //var light_dir = DirLight.transform.forward;
+    //RTshader.SetVector("_DirectionalLight",
+    //                   new Vector4(light_dir.x, light_dir.y, light_dir.z, DirLight.intensity));
+
+    // Set the sphere attributes compute buffers.                  
     RTcomputeShaderHelper.SetComputeBuffer(ref RTshader, "_Spheres", Locator.SpheresComputeBuf);
+    // Set the mesh objects attributes compute buffers.
     RTcomputeShaderHelper.SetComputeBuffer(ref RTshader, "_MeshObjects", Helper.MeshObjectsAttrsComputeBuf);
-    RTcomputeShaderHelper.SetComputeBuffer(ref RTshader, "_Vertices", Helper.VerticesComputeBuf);
-    RTcomputeShaderHelper.SetComputeBuffer(ref RTshader, "_Indices", Helper.IndicesComputeBuf);
-    RTcomputeShaderHelper.SetComputeBuffer(ref RTshader, "_Colors", Helper.VtxColorsComputeBuf);
-    //RayTracingShader.SetInt("_Test_Colors_Length", _vertex_color_buffer.count);
+
+    // if there's vertices, set the vertices and the indices compute buffers.
+    if (Helper.VerticesList.Count > 0) {
+      RTcomputeShaderHelper.SetComputeBuffer(ref RTshader, "_Vertices", Helper.VerticesComputeBuf);
+      RTcomputeShaderHelper.SetComputeBuffer(ref RTshader, "_Indices", Helper.IndicesComputeBuf);
+    }
+    // if there's vertex color affected, set the vertex color compute buffers.
+    if (Helper.VtxColorsList.Count > 0) {
+      RTcomputeShaderHelper.SetComputeBuffer(ref RTshader, "_VertexColors", Helper.VtxColorsComputeBuf);
+    }
+    // if there's texture color affected, set the texture color compute buffers.
+    if (Helper.TextureColorsList.Count > 0) {
+      RTcomputeShaderHelper.SetComputeBuffer(ref RTshader, "_TextureColors", Helper.TextureColorsComputeBuf);
+      RTcomputeShaderHelper.SetComputeBuffer(ref RTshader, "_UVs", Helper.UVsComputeBuf);
+    }
   }
 
-  void SetShaderParamsRuntime() {
-    RTshader.SetVector("_Time",
-    new Vector4(Time.time * 10,
-                Time.time * 20,
-                Time.time * 50,
-                Time.time * 100));
+  /// <summary>
+  /// Set Ray Tracing Shader Parameters at runtime (called in Update)
+  /// </summary>
+  void SetShaderParamsAtRuntime() {
+    var timeOffset = new Vector4(Time.time * 10,
+                                 Time.time * 20,
+                                 Time.time * 50,
+                                 Time.time * 100);
+    // Set the Time parameter for moving the objects in Ray Tracer.
+    RTshader.SetVector("_Time", timeOffset);
   }
 
+  /// <summary>
+  /// It's called when if some mesh objects is target to be added into the Ray Tracer.  
+  /// </summary>
   void RebuildMeshObjects() {
-    Helper.RebuildMeshObjects();    
-  }   
+    Helper.RebuildMeshObjects();
+  }
 };

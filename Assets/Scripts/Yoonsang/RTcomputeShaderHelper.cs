@@ -48,47 +48,59 @@ public class RTcomputeShaderHelper : MonoBehaviour {
   /// <summary>
   /// 
   /// </summary>
-  public List<(Vector3, int)> TextureColorsList = new List<(Vector3, int)>();
+  public List<Vector3> TextureColorsList = new List<Vector3>();
   /// <summary>
   /// 
   /// </summary>
   public ComputeBuffer TextureColorsComputeBuf;
   /// <summary>
+  /// 
+  /// </summary>
+  public List<Vector2> UVsList = new List<Vector2>();
+  /// <summary>
+  /// 
+  /// </summary>
+  public ComputeBuffer UVsComputeBuf;
+  /// <summary>
   ///  
   /// </summary>
-  public Texture2D TargetTexture;
+  public Texture2D[] TargetTextures;
+  /// <summary>
+  /// 
+  /// </summary>
   Texture2D ResultTexture;
+  /// <summary>
+  /// 
+  /// </summary>
   public RenderTexture TempRenderTexture;
+
 
   void Start() {
     RTdbg.DbgStopwatch.Start();
-    TextureColorsList = DecomposeTextureIntoPixels(ref TargetTexture);
     RTdbg.DbgStopwatch.Stop();
-    Debug.Log($"Elapsed time of Decomposing the texture into the pixel : {RTdbg.DbgStopwatch.ElapsedMilliseconds} ms");
+    Debug.Log($"Elapsed time of Decomposing the texture into the pixel : {RTdbg.DbgStopwatch.ElapsedMilliseconds} ms", this);
+
     Assert.IsNotNull(TempRenderTexture, "TempRenderTexture is null!");
     RenderTexture.active = TempRenderTexture;
   }
 
   void OnDisable() {
-    // Check each compute buffers are still valid and release it!
-    if (!MeshObjectsAttrsComputeBuf.Null()) {
-      MeshObjectsAttrsComputeBuf.Release();
-      MeshObjectsAttrsComputeBuf = null;
-    }
+    // Check each compute buffers are still valid and release it!    
+    DisposeComputeBuffers(ref MeshObjectsAttrsComputeBuf);
+    DisposeComputeBuffers(ref VtxColorsComputeBuf);
+    DisposeComputeBuffers(ref VtxColorsComputeBuf);
+    DisposeComputeBuffers(ref TextureColorsComputeBuf);
+    DisposeComputeBuffers(ref UVsComputeBuf);
+  }
 
-    if (!VtxColorsComputeBuf.Null()) {
-      VtxColorsComputeBuf.Release();
-      VtxColorsComputeBuf = null;
-    }
-
-    if (!VtxColorsComputeBuf.Null()) {
-      VtxColorsComputeBuf.Release();
-      VtxColorsComputeBuf = null;
-    }
-
-    if (!TextureColorsComputeBuf.Null()) {
-      TextureColorsComputeBuf.Release();
-      TextureColorsComputeBuf = null;
+  /// <summary>
+  /// Check the compute buffer are still valid and release it!    
+  /// </summary>
+  /// <param name="buf"></param>
+  void DisposeComputeBuffers(ref ComputeBuffer buf) {
+    if (!buf.Null()) {
+      buf.Release();
+      buf = null;
     }
   }
 
@@ -131,6 +143,7 @@ public class RTcomputeShaderHelper : MonoBehaviour {
     VerticesList.Clear();
     IndicesList.Clear();
     VtxColorsList.Clear();
+    bool DoesNeedToDecomposeTexture = false;
 
     // Loop over all objects and gather their data into a single list of the vertices,
     // the indices and the mesh objects.
@@ -138,38 +151,70 @@ public class RTcomputeShaderHelper : MonoBehaviour {
       // forward the mesh.
       var mesh = go.GetComponent<MeshFilter>().sharedMesh;
 
+      // 1. Vertices.
       // add vertices data first.
       int verticesStride = VerticesList.Count;
       // AddRange() -> Adds the elements of the specified collection to the end of the 'VerticesList'
       VerticesList.AddRange(mesh.vertices);
 
+      // 2. Indices.
       // Add index data - if the vertex compute buffer wasn't empty before,
       // the indices need to push some offsets.
       int indicesStride = IndicesList.Count;
       int[] indices = mesh.GetIndices(0);
       IndicesList.AddRange(indices.Select(e => e + verticesStride));
 
+      // 3. UVs.
+      // Add uv data
+      int uvStride = UVsList.Count;
+      var forwarded = new List<Vector2>();
+      mesh.GetUVs(0, forwarded);
+      UVsList.AddRange(forwarded);
+
+
       // If the element(go) is convertible of 'RTmeshCube' then we need to add more info
-      // about the vertices colors.
-      bool is_cube = !go.GetComponent<RTmeshCube>().Null();
+      // about the vertices colors.      
+
+      var rtObject = go.GetComponent<RTmeshObject>();
 
       // Add the mesh object attributes.
       MeshObjectsAttrsList.Add(new RTmeshObjectAttr() {
         Local2WorldMatrix = go.transform.localToWorldMatrix,
         IndicesOffset = indicesStride,
         IndicesCount = indices.Length,
-        UseVtxCol = is_cube ? 1 : 0
+        colorMode = (int)rtObject.ColorMode
       });
 
-      if (is_cube) {
-        VtxColorsList.AddRange(mesh.colors.Select(e => new Vector3(e.r, e.g, e.b)));
+      switch (rtObject.ColorMode) {
+        case eColorMode.NONE:
+        // Nothing to do!
+        break;
+
+        case eColorMode.TEXTURE:
+        DoesNeedToDecomposeTexture = true;
+        break;
+
+        case eColorMode.VERTEX_COLOR:
+        //VtxColorsList.AddRange(mesh.colors.Select(e => new Vector3(e.r, e.g, e.b)));
+        break;
       }
     }
 
+    if (DoesNeedToDecomposeTexture) {
+      DecomposeTextureIntoPixels(ref TargetTextures);
+    }
     CreateOrBindDataToComputeBuffer(ref MeshObjectsAttrsComputeBuf, MeshObjectsAttrsList, 80); //
     CreateOrBindDataToComputeBuffer(ref VerticesComputeBuf, VerticesList, 12); // float3
     CreateOrBindDataToComputeBuffer(ref IndicesComputeBuf, IndicesList, 4); // int
-    CreateOrBindDataToComputeBuffer(ref VtxColorsComputeBuf, VtxColorsList, 12); // float3
+
+    //if (VtxColorsList.Count >= 0) {
+    //  CreateOrBindDataToComputeBuffer(ref VtxColorsComputeBuf, VtxColorsList, 12); // float3
+    //}
+
+    if (TextureColorsList.Count >= 0) {
+      CreateOrBindDataToComputeBuffer(ref TextureColorsComputeBuf, TextureColorsList, 12); // float3
+      CreateOrBindDataToComputeBuffer(ref UVsComputeBuf, UVsList, 8);
+    }
   }
 
   /// <summary>
@@ -216,30 +261,39 @@ public class RTcomputeShaderHelper : MonoBehaviour {
     shader.SetBuffer(0, name, buffer);
   }
 
-  List<(Vector3, int)> DecomposeTextureIntoPixels(ref Texture2D tex) {
-    Assert.IsNotNull(tex, "Target texture cannot be null!");
+  /// <summary>
+  /// 
+  /// </summary>
+  /// <param name="tex"></param>
+  /// <returns></returns>
+  public void DecomposeTextureIntoPixels(ref Texture2D[] targetTextures) {
+    Assert.IsNotNull(targetTextures, "Target texture cannot be null!");
+    Assert.IsFalse(targetTextures.Length == 0, "Target textures count cannot be zero!");
     // Retrieve the dimensions from the target texture.
-    var dimensions = (x: tex.width, y: tex.height);
-    var colArr = new Vector3[dimensions.x, dimensions.y];
-    var resCol = new Color[dimensions.x, dimensions.y];
-    var result = new List<(Vector3, int)>();
-    int stride = 0;
-    ResultTexture = new Texture2D(dimensions.x, dimensions.y);
-    
-    for (int i = 0; i < dimensions.y; ++i) {
-      for (int j = 0; j < dimensions.x; ++j, ++stride) {
-        // Forward the pixel into variable.
-        var pixel = tex.GetPixel(j, i);
-        // Add the colors values and the stride into the result.
-        result.Add((
-          new Vector3(pixel.r, pixel.g, pixel.b),
-          stride));
-        resCol[j, i] = pixel;
-        ResultTexture.SetPixel(j, i, pixel);
+    for (int a = 0; a < targetTextures.Length; ++a) {
+      var dimensions = (x: targetTextures[a].width, y: targetTextures[a].height);
+      var colArr = new Vector3[dimensions.x, dimensions.y];
+      var resCol = new Color[dimensions.x, dimensions.y];
+      int stride = 0;
+      ResultTexture = new Texture2D(dimensions.x, dimensions.y);
+      // read the texture array vertically->horizontally
+      for (int i = 0; i < dimensions.y; ++i) {
+        for (int j = 0; j < dimensions.x; ++j, ++stride) {
+          // Forward the pixel into variable.
+          var pixel = targetTextures[a].GetPixel(j, i);
+          // Add the colors values and the stride into the result.
+          //result.Add((
+          //  new Vector3(pixel.r, pixel.g, pixel.b),
+          //  stride));
+          TextureColorsList.Add(new Vector3(pixel.r, pixel.g, pixel.b));
+          resCol[j, i] = pixel;
+          ResultTexture.SetPixel(j, i, pixel);
+        }
       }
     }
+
+    // Apply the render texture.
     ResultTexture.Apply();
     Graphics.Blit(ResultTexture, TempRenderTexture);
-    return result;
   }
 };
