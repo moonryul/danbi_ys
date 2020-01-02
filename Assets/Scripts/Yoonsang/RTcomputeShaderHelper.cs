@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.Assertions;
 
 public class RTcomputeShaderHelper : MonoBehaviour {
   /// <summary>
@@ -44,8 +45,31 @@ public class RTcomputeShaderHelper : MonoBehaviour {
   /// 
   /// </summary>
   public ComputeBuffer VtxColorsComputeBuf;
+  /// <summary>
+  /// 
+  /// </summary>
+  public List<(Vector3, int)> TextureColorsList = new List<(Vector3, int)>();
+  /// <summary>
+  /// 
+  /// </summary>
+  public ComputeBuffer TextureColorsComputeBuf;
+  /// <summary>
+  ///  
+  /// </summary>
+  public Texture2D TargetTexture;
+  Texture2D ResultTexture;
+  public RenderTexture TempRenderTexture;
 
-  public void OnDisable() {
+  void Start() {
+    RTdbg.DbgStopwatch.Start();
+    TextureColorsList = DecomposeTextureIntoPixels(ref TargetTexture);
+    RTdbg.DbgStopwatch.Stop();
+    Debug.Log($"Elapsed time of Decomposing the texture into the pixel : {RTdbg.DbgStopwatch.ElapsedMilliseconds} ms");
+    Assert.IsNotNull(TempRenderTexture, "TempRenderTexture is null!");
+    RenderTexture.active = TempRenderTexture;
+  }
+
+  void OnDisable() {
     // Check each compute buffers are still valid and release it!
     if (!MeshObjectsAttrsComputeBuf.Null()) {
       MeshObjectsAttrsComputeBuf.Release();
@@ -61,14 +85,27 @@ public class RTcomputeShaderHelper : MonoBehaviour {
       VtxColorsComputeBuf.Release();
       VtxColorsComputeBuf = null;
     }
+
+    if (!TextureColorsComputeBuf.Null()) {
+      TextureColorsComputeBuf.Release();
+      TextureColorsComputeBuf = null;
+    }
   }
 
+  /// <summary>
+  /// 
+  /// </summary>
+  /// <param name="obj"></param>
   public static void RegisterToRTobject(RTmeshObject obj) {
     MeshObjectsList.Add(obj);
     Debug.Log($"obj <{obj.name}> is added into the RT object list.");
     DoesNeedToRebuildRTobjects = true;
   }
 
+  /// <summary>
+  /// 
+  /// </summary>
+  /// <param name="obj"></param>
   public static void UnregisterToRTobject(RTmeshObject obj) {
     if (MeshObjectsList.Contains(obj)) {
       MeshObjectsList.Remove(obj);
@@ -78,7 +115,11 @@ public class RTcomputeShaderHelper : MonoBehaviour {
     }
     Debug.LogError($"obj <{obj.name}> isn't contained in the RT object list.");
   }
-  
+
+  /// <summary>
+  /// Rebuild the entire list that is going to be transferred into the Compute Shader.
+  /// (currently : Vertices, Indices, VertexColors, TextureColors).
+  /// </summary>
   public void RebuildMeshObjects() {
     if (!DoesNeedToRebuildRTobjects) {
       return;
@@ -131,6 +172,13 @@ public class RTcomputeShaderHelper : MonoBehaviour {
     CreateOrBindDataToComputeBuffer(ref VtxColorsComputeBuf, VtxColorsList, 12); // float3
   }
 
+  /// <summary>
+  /// 
+  /// </summary>
+  /// <typeparam name="T"></typeparam>
+  /// <param name="buffer"></param>
+  /// <param name="data"></param>
+  /// <param name="stride"></param>
   void CreateOrBindDataToComputeBuffer<T>(ref ComputeBuffer buffer,
                                    List<T> data, int stride) where T : struct {
     // check if we already have a compute buffer.
@@ -154,11 +202,44 @@ public class RTcomputeShaderHelper : MonoBehaviour {
     }
   }
 
+  /// <summary>
+  /// 
+  /// </summary>
+  /// <param name="shader"></param>
+  /// <param name="name"></param>
+  /// <param name="buffer"></param>
   public static void SetComputeBuffer(ref ComputeShader shader, string name, ComputeBuffer buffer) {
     if (buffer.Null()) {
       return;
     }
 
     shader.SetBuffer(0, name, buffer);
+  }
+
+  List<(Vector3, int)> DecomposeTextureIntoPixels(ref Texture2D tex) {
+    Assert.IsNotNull(tex, "Target texture cannot be null!");
+    // Retrieve the dimensions from the target texture.
+    var dimensions = (x: tex.width, y: tex.height);
+    var colArr = new Vector3[dimensions.x, dimensions.y];
+    var resCol = new Color[dimensions.x, dimensions.y];
+    var result = new List<(Vector3, int)>();
+    int stride = 0;
+    ResultTexture = new Texture2D(dimensions.x, dimensions.y);
+    
+    for (int i = 0; i < dimensions.y; ++i) {
+      for (int j = 0; j < dimensions.x; ++j, ++stride) {
+        // Forward the pixel into variable.
+        var pixel = tex.GetPixel(j, i);
+        // Add the colors values and the stride into the result.
+        result.Add((
+          new Vector3(pixel.r, pixel.g, pixel.b),
+          stride));
+        resCol[j, i] = pixel;
+        ResultTexture.SetPixel(j, i, pixel);
+      }
+    }
+    ResultTexture.Apply();
+    Graphics.Blit(ResultTexture, TempRenderTexture);
+    return result;
   }
 };

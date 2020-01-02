@@ -152,7 +152,7 @@ bool IntersectTriangle_MT97_internal(Ray ray, float3x3 vtx, inout float3 tuv, in
     if (dter < EPS) {
       return false;
     }
-  }*/  
+  }*/
 
   /*if (useCull == 0) {
     if (dter > EPS) {
@@ -206,7 +206,7 @@ void IntersectMesh(Ray ray, inout RayHit bestHit, MeshObject mesh, int round) {
         bestHit.albedo = ( float3 )0;
         bestHit.specular = 0.65f;
 
-        bestHit.emission = mesh.use_vertex_color == 1 && round > 0 ? _Colors[round * 3] : ( float3 )0.01;
+        bestHit.emission = mesh.use_vertex_color == 1 ? _Colors[( round + 1 ) * 3] : ( float3 )0.01;
 
         // constant red color for a test.
         //bestHit.emission = float3(1, 0, 0);
@@ -287,14 +287,14 @@ float3 Shade(inout Ray ray, RayHit hit) {
 
     // saturate() : The x parameter, clamped within the range of 0 to 1.
     //return saturate(dot(hit.normal, _DirectionalLight.xyz) * -1) * _DirectionalLight.w + hit.emission;
-    return hit.emission;// * hit.emission;
+    return hit.emission;
   } else {
     // Erase the ray's energy - the sky doesn't reflect anything.
     ray.energy = ( float3 )0.0;
     // 1. Sample the skybox and write it.
     float theta = acos(ray.direction.y) / -PI;
     float phi = atan2(ray.direction.x, -ray.direction.z) / -PI * 0.5;
-    return _SkyboxTexture.SampleLevel(sampler_SkyboxTexture, float2( phi, theta ), 0).xyz;        
+    return _SkyboxTexture.SampleLevel(sampler_SkyboxTexture, float2( phi, theta ), 0).xyz;
 
     // 2. draw with constant Black color.
     //return ( float3 )0;

@@ -2,9 +2,9 @@
 
 public class RTdbg {
   public Vector3[] RetrivedColBuf;
-  public System.Diagnostics.Stopwatch DbgStopwatch;
+  public static System.Diagnostics.Stopwatch DbgStopwatch;
 
-  public RTdbg() {
+  static RTdbg() {
     DbgStopwatch = new System.Diagnostics.Stopwatch();
   }
 
