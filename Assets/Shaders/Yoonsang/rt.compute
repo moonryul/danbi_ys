@@ -11,6 +11,7 @@ SamplerState sampler_SkyboxTexture;
 
 Texture2D<float4> _TargetTexture;
 SamplerState sampler_TargetTexture;
+
 float2 _PixelOffset;
 float4 _Time;
 float4 _DirectionalLight;
@@ -172,26 +173,26 @@ bool IntersectTriangle_MT97_internal(Ray ray, float3x3 vtx, inout float3 tuv, in
   // calculate distance from vtx[0] to ray origin.
   float3 tvec = ray.origin - vtx[0];
   // calculate U paramter and test bounds.
-  tuv.y = dot(tvec, pvec) * inv_dter;
-  if (tuv.y < 0.0 || tuv.y > 1.0) {
+  tuv[1] = dot(tvec, pvec) * inv_dter;
+  if (tuv[1] < 0.0 || tuv[1] > 1.0) {
     return false;
   }
   // prepare to test v pararmeter.
   float3 qvec = cross(tvec, edge1);
   // calculate v parameter and test bounds.
-  tuv.z = dot(ray.direction, qvec) * inv_dter;
-  if (tuv.z < 0.0 || tuv.y + tuv.z > 1.0) {
+  tuv[2] = dot(ray.direction, qvec) * inv_dter;
+  if (tuv[2] < 0.0 || tuv[1] + tuv[2] > 1.0) {
     return false;
   }
   // calculate t, ray intersects triangle.
-  tuv.x = dot(edge2, qvec) * inv_dter;
+  tuv[0] = dot(edge2, qvec) * inv_dter;
   return true;
 }
 
 void IntersectMesh(Ray ray, inout RayHit bestHit, MeshObject mesh, int round) {
   uint offset = mesh.indicesStride;
   uint count = mesh.indicesCount + offset;
-  int flag = 0;
+  
   for (uint i = offset; i < count; i += 3) {
     float3x3 vtx = float3x3( mul(mesh.localToWorldMatrix, float4( _Vertices[_Indices[i]], 1 )).xyz,
                             mul(mesh.localToWorldMatrix, float4( _Vertices[_Indices[i + 1]], 1 )).xyz,
@@ -208,32 +209,36 @@ void IntersectMesh(Ray ray, inout RayHit bestHit, MeshObject mesh, int round) {
         bestHit.specular = 0.5f;
         switch (mesh.colorMode) {
           // Nothing to do.
-        case 0:
-        bestHit.emission = ( float3 ) 0.01f;
-        break;
+          case 0:
+          bestHit.emission = ( float3 ) 0.01f;
+          break;
+          
+          // Texture colors.
+          case 1:
+          // <see href="https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-samplelevel">HERE</href>
+          // SampleLevel -> is similar to Sample except that is uses the LOD level (in the last component of the location parameter) 
+          // to choose the mipmap level. For example, a 2D texture uses the first two components for uv coordinates and the third
+          // component for the mipmap level.
 
-        // Texture colors.
-        case 1:
-        // <see href="https://docs.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-samplelevel">HERE</href>
-        // SampleLevel -> is similar to Sample except that is uses the LOD level (in the last component of the location parameter) 
-        // to choose the mipmap level. For example, a 2D texture uses the first two components for uv coordinates and the third
-        // component for the mipmap level.
-        bestHit.emission = _TargetTexture.SampleLevel(
-          sampler_TargetTexture,
-          flag == 0 ? float2( tuv.y, tuv.z ) : float2( -tuv.z, tuv.z ), 0).xyz;
+          /*bestHit.emission = _TargetTexture.SampleLevel(
+            sampler_TargetTexture, float2( tuv[1], 1 - tuv[1] - tuv[2] ), 0).xyz;*/
+          //bestHit.emission = float3( tuv[1], tuv[2], 1 - tuv[1] - tuv[2] );
+          //
 
-        if (flag == 0) {
-          flag = 1;
-        }
-        if (flag == 1) {
-          flag = 0;
-        }
-        break;
+          // Conversion from the barycentric coordinates to the cartesian cooridnates.
+          float3 b2c = tuv[0] * vtx[0]
+            + tuv[1] * vtx[1]
+            + tuv[2] * vtx[2];
 
-        // Vertex colors.
-        /*case 2:
-        bestHit.emission = _VertexColors[( round + 1 ) * 3];
-        break;*/
+          bestHit.emission = _TargetTexture.SampleLevel(
+            sampler_TargetTexture,
+            float2( b2c[0] * 0.05, b2c[1] * 0.05), 0).xyz;
+          break;
+          
+          // Vertex colors.
+          /*case 2:
+          bestHit.emission = _VertexColors[( round + 1 ) * 3];
+          break;*/
         }
       }
     }
