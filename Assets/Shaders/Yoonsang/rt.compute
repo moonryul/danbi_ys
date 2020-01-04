@@ -198,6 +198,12 @@ void IntersectMesh(Ray ray, inout RayHit bestHit, MeshObject mesh, int round) {
                             mul(mesh.localToWorldMatrix, float4( _Vertices[_Indices[i + 1]], 1 )).xyz,
                             mul(mesh.localToWorldMatrix, float4( _Vertices[_Indices[i + 2]], 1 )).xyz );
 
+	// Added by Moon: Get the texture coordinates of the vertices of the current triangle
+	float3x2 vertexTexUV = float3x2(_UV[_Indices[i]],
+	                          _UV[_Indices[i + 1]],
+		                      _UV[_Indices[i + 2]] );
+
+
     float3 tuv = ( float3 )0;
     if (IntersectTriangle_MT97_internal(ray, vtx, tuv, mesh.colorMode)) {
       if (tuv.x > 0.0 && tuv.x < bestHit.distance) {
@@ -226,13 +232,18 @@ void IntersectMesh(Ray ray, inout RayHit bestHit, MeshObject mesh, int round) {
           //
 
           // Conversion from the barycentric coordinates to the cartesian cooridnates.
-          float3 b2c = tuv[0] * vtx[0]
+	      // Commented out by Moon
+         /* float3 b2c = tuv[0] * vtx[0]
             + tuv[1] * vtx[1]
             + tuv[2] * vtx[2];
+*/        // Added by Moon
 
+		  float3 uv = (1 - tuv[1] - tuv[2]) *  vertexTexUV[0]
+				   + tuv[1] * vertexTexUV[1]
+				   + tuv[2] * vertexTexUV[2
+				   ];
           bestHit.emission = _TargetTexture.SampleLevel(
-            sampler_TargetTexture,
-            float2( b2c[0] * 0.05, b2c[1] * 0.05), 0).xyz;
+                               sampler_TargetTexture, uv ).xyz;
           break;
           
           // Vertex colors.
